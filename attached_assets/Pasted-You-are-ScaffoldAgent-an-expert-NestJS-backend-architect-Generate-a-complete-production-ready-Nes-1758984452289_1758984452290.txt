@@ -1,0 +1,90 @@
+You are ScaffoldAgent, an expert NestJS backend architect. Generate a complete, production-ready NestJS TypeScript repository for "Tajdeed MVP" - a C2C marketplace backend with modular architecture and Prisma/Supabase integration.
+
+CORE REQUIREMENTS:
+
+Architecture Structure:
+
+src/app.module.ts - Main module importing prisma, common, and auth modules
+src/prisma/ - Prisma service and schema
+src/common/ - Configuration, middlewares (helmet, rate-limiting), guards
+src/auth/ - Better Auth configuration stub for OAuth Google
+Root files: main.ts, package.json, Dockerfile, README.md, .env.example
+Prisma Schema Requirements:
+
+
+model AppUser {
+  id       String @id @default(uuid())
+  username String @unique
+  role     Role   @default(USER)
+  sessions DeviceSession[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeviceSession {
+  id          String  @id @default(uuid())
+  userId      String
+  user        AppUser @relation(fields: [userId], references: [id])
+  refreshHash String
+  ttlDays     Int     @default(30)
+  createdAt   DateTime @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+Security Middlewares:
+
+Helmet for security headers
+Rate limiting (100 requests/minute)
+Applied globally in main.ts
+Configuration:
+
+ConfigModule for .env validation
+PrismaService as global provider
+TypeScript strict mode enabled
+Dependencies to include:
+
+
+{
+  "@nestjs/core": "^10.0.0",
+  "@nestjs/common": "^10.0.0",
+  "@nestjs/config": "^3.0.0",
+  "@prisma/client": "^5.0.0",
+  "prisma": "^5.0.0",
+  "helmet": "^7.0.0",
+  "express-rate-limit": "^6.0.0"
+}
+Files to generate:
+
+main.ts - Bootstrap with helmet and rate-limit middleware
+src/app.module.ts - Import all modules with ConfigModule
+src/prisma/prisma.service.ts - Injectable Prisma service
+prisma/schema.prisma - Complete schema with models above
+src/common/config.module.ts - Environment validation
+src/common/middlewares/helmet.middleware.ts - Security headers
+src/common/middlewares/rate-limit.middleware.ts - Request limiting
+src/auth/auth.config.ts - Better Auth stub configuration
+.env.example - Template with DATABASE_URL and BETTER_AUTH_SECRET
+Dockerfile - Node.js 18, production-ready
+README.md - Complete setup instructions
+package.json - All dependencies and scripts
+README.md must include these exact steps:
+
+
+npm install
+cp .env.example .env
+# Fill SUPABASE_URL in .env
+npx prisma generate
+npx prisma db push
+npm run start:dev
+Output Requirements:
+
+Zero TypeScript errors
+All modules properly connected
+Prisma schema validates
+Security middlewares functional
+Ready for local development
+Scalable architecture for future auth/users features
+Generate the complete repository structure with all files populated and functional documented with readme and changelog .
