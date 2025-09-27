@@ -58,6 +58,74 @@ Copy `.env.example` to `.env` and configure:
 - `GOOGLE_CLIENT_ID`: Google OAuth client ID (optional)
 - `GOOGLE_CLIENT_SECRET`: Google OAuth client secret (optional)
 
+## 🔐 Authentication API
+
+### Endpoints
+
+#### POST /auth/google
+Initialise l'authentification OAuth Google.
+
+```bash
+curl -X POST http://localhost:3000/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{"code": "google_oauth_code_here"}'
+```
+
+**Response:**
+```json
+{
+  "accessToken": "access_userId_timestamp",
+  "refreshToken": "uuid.timestamp", 
+  "user": {
+    "id": "user_id",
+    "username": "user@example.com",
+    "role": "USER"
+  },
+  "expiresIn": 900
+}
+```
+
+#### GET /auth/google/callback
+Callback OAuth Google (automatique).
+
+```bash
+curl "http://localhost:3000/auth/google/callback?code=google_code&state=optional_state"
+```
+
+#### POST /auth/refresh
+Rafraîchit l'access token.
+
+```bash
+curl -X POST http://localhost:3000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "your_refresh_token"}'
+```
+
+#### GET /auth/me
+Récupère le profil utilisateur (protégé).
+
+```bash
+curl -X GET http://localhost:3000/auth/me \
+  -H "Authorization: Bearer your_access_token"
+```
+
+#### POST /auth/logout
+Déconnexion et révocation de session.
+
+```bash
+curl -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer your_access_token"
+```
+
+### Security Features
+
+- **Rate Limiting**: 
+  - Global: 100 requests/minute
+  - Auth endpoints: 5 requests/15 minutes
+- **JWT Validation**: AuthGuard protège les routes sensibles
+- **Session Management**: Sessions persistantes avec refresh tokens (TTL 30 jours)
+- **CORS**: Configuré pour développement/production
+
 ## Available Scripts
 
 - `npm run start:dev` - Start development server
