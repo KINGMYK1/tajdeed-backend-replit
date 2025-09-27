@@ -48,7 +48,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, 'localhost');
   console.log(`🚀 Tajdeed MVP Backend is running on: http://localhost:${port}`);
 }
 
