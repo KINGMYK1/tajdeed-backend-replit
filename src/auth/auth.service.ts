@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IAuthService, AuthResult, SessionData, GoogleUserInfo } from './interfaces/auth.interface';
 import { createBetterAuthConfig } from './auth.config';
 import { AppUser, Role } from '@prisma/client';
+import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService implements IAuthService {
@@ -29,12 +31,18 @@ export class AuthService implements IAuthService {
       // Créer ou récupérer l'utilisateur dans notre base
       const user = await this.findOrCreateUser(mockGoogleUser);
 
-      // Générer des tokens
-      const accessToken = this.generateAccessToken(user.id);
+      // Créer une session device d'abord
+      const deviceSession = await this.createDeviceSession(user.id);
+      
+      // Générer des tokens sécurisés
+      const accessToken = this.generateAccessToken(user.id, deviceSession.id);
       const refreshToken = this.generateRefreshHash();
-
-      // Créer une session device
-      await this.createDeviceSession(user.id, refreshToken);
+      
+      // Mettre à jour avec le vrai refresh token
+      await this.prismaService.deviceSession.update({
+        where: { id: deviceSession.id },
+        data: { refreshHash: this.hashRefreshToken(refreshToken) },
+      });
 
       return {
         accessToken,
@@ -50,9 +58,10 @@ export class AuthService implements IAuthService {
 
   async refreshToken(refreshToken: string): Promise<AuthResult> {
     try {
-      // Vérifier le refresh token dans notre base
+      // Vérifier le refresh token haché dans notre base
+      const hashedRefreshToken = this.hashRefreshToken(refreshToken);
       const deviceSession = await this.prismaService.deviceSession.findFirst({
-        where: { refreshHash: refreshToken },
+        where: { refreshHash: hashedRefreshToken },
         include: { user: true },
       });
 
@@ -71,19 +80,19 @@ export class AuthService implements IAuthService {
         throw new UnauthorizedException('Refresh token expiré');
       }
 
-      // Générer un nouveau token
-      const newAccessToken = this.generateAccessToken(deviceSession.userId);
+      // Générer un nouveau token avec session ID
+      const newAccessToken = this.generateAccessToken(deviceSession.userId, deviceSession.id);
 
-      // Mettre à jour la session
-      const newRefreshHash = this.generateRefreshHash();
+      // Mettre à jour la session avec nouveau refresh token
+      const newRefreshToken = this.generateRefreshHash();
       await this.prismaService.deviceSession.update({
         where: { id: deviceSession.id },
-        data: { refreshHash: newRefreshHash },
+        data: { refreshHash: this.hashRefreshToken(newRefreshToken) },
       });
 
       return {
         accessToken: newAccessToken,
-        refreshToken: newRefreshHash,
+        refreshToken: newRefreshToken,
         user: deviceSession.user,
         expiresIn: 900,
       };
@@ -95,12 +104,10 @@ export class AuthService implements IAuthService {
 
   async logout(sessionId: string): Promise<void> {
     try {
-      // Supprimer la session de notre base
-      await this.prismaService.deviceSession.deleteMany({
-        where: { refreshHash: sessionId },
+      // Supprimer la session par ID (cohérent avec AuthGuard)
+      await this.prismaService.deviceSession.delete({
+        where: { id: sessionId },
       });
-
-      // Session supprimée de notre base de données
     } catch (error) {
       // Silently fail logout errors
       console.error('Erreur lors de la déconnexion:', error);
@@ -123,15 +130,18 @@ export class AuthService implements IAuthService {
 
   async validateSession(accessToken: string): Promise<SessionData | null> {
     try {
-      // Décoder le token simple (en production, utiliser JWT)
-      const userId = this.extractUserIdFromToken(accessToken);
-      if (!userId) {
+      // Vérifier JWT et extraire payload
+      const tokenData = this.verifyAccessToken(accessToken);
+      if (!tokenData) {
         return null;
       }
 
-      // Vérifier que la session existe
+      // Vérifier que la session existe et correspond au token
       const deviceSession = await this.prismaService.deviceSession.findFirst({
-        where: { userId },
+        where: { 
+          id: tokenData.sessionId,
+          userId: tokenData.userId 
+        },
         include: { user: true },
       });
 
@@ -168,31 +178,53 @@ export class AuthService implements IAuthService {
     return user;
   }
 
-  private async createDeviceSession(userId: string, accessToken: string): Promise<any> {
-    const refreshHash = this.generateRefreshHash();
-    
+  private async createDeviceSession(userId: string): Promise<any> {
     return await this.prismaService.deviceSession.create({
       data: {
         userId,
-        refreshHash,
+        refreshHash: 'temp', // Sera mis à jour après génération du token
         ttlDays: 30,
       },
     });
+  }
+
+  private hashRefreshToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   private generateRefreshHash(): string {
     return crypto.randomUUID() + '.' + Date.now();
   }
 
-  private generateAccessToken(userId: string): string {
-    // Simple token pour dev (en production, utiliser JWT)
-    return `access_${userId}_${Date.now()}`;
+  private generateAccessToken(userId: string, sessionId: string): string {
+    const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
+    const payload = {
+      sub: userId,
+      jti: sessionId,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
+    };
+    return jwt.sign(payload, secret);
   }
 
   private extractUserIdFromToken(token: string): string | null {
     try {
-      const parts = token.split('_');
-      return parts.length >= 2 ? parts[1] : null;
+      const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
+      const decoded = jwt.verify(token, secret) as any;
+      return decoded.sub || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private verifyAccessToken(token: string): { userId: string; sessionId: string } | null {
+    try {
+      const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
+      const decoded = jwt.verify(token, secret) as any;
+      return {
+        userId: decoded.sub,
+        sessionId: decoded.jti,
+      };
     } catch {
       return null;
     }
