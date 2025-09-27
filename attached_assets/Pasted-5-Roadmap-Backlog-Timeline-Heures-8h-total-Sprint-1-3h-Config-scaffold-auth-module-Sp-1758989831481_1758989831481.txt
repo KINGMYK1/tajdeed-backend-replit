@@ -1,0 +1,36 @@
+5. Roadmap & Backlog
+Timeline Heures (8h total) :
+
+Sprint 1 (3h) : Config + scaffold auth module.
+Sprint 2 (3h) : Implémenter controllers/services/guards.
+Sprint 3 (2h) : Tests, docs, changelog.
+
+Backlog Issues GitHub (10 focalisées, format : Titre | Desc | Critères | Complexité S/M/L) :
+
+Config Better Auth OAuth (M) : Intégrer Google creds. Critères : Tokens générés local.
+Créer Auth Controller (M) : Endpoints /google /callback /refresh /logout /me. Critères : Responses 200/401.
+Implémenter Auth Service (L) : Logique sessions + Prisma. Critères : DeviceSession créée.
+Ajouter Auth Guard JWT (M) : Protéger /me. Critères : Unauthorized sans token.
+Validation DTO Auth (S) : Class-validator pour bodies. Critères : Erreurs 400 invalid input.
+Tests Unit Auth Service (M) : Mock Prisma/Better Auth. Critères : 80% coverage.
+Tests Intégration Endpoints (M) : Supertest flows. Critères : Full OAuth simu.
+Docs Endpoints README (S) : Exemples curl. Critères : Clair/testable.
+Rate-Limit Spécifique Auth (S) : 5/15min. Critères : Bloque après seuil.
+Créer Changelog.md (S) : v0.2.0 entry. Critères : Format standard.
+
+6. Scaffolding
+Prompt Maître pour Auth Module (Prêt-à-coller dans Bolt/Manus) :
+"Génère extensions pour repo NestJS Tajdeed (structure existante) : Focus auth module. Ajoute auth.module.ts (providers: AuthService, exports: AuthGuard), auth.controller.ts (endpoints clairs: POST /google, GET /callback, POST /refresh, POST /logout, GET /me protégé), auth.service.ts (méthodes SOLID: signInGoogle, refreshToken, logout, getMe ; utilise Better Auth API + Prisma pour DeviceSession), auth.guard.ts (CanActivate avec JWT check). Inclue DTOs validation, respect SOLID. Ajoute section README pour docs endpoints (curl exemples), et CHANGELOG.md avec v0.2.0."
+→ Étape : Intégrer au repo existant, npm run start:dev.
+7. Guides Dev
+Setup VSCode/Commands :
+
+Extensions : NestJS, Prisma, Postman.
+Commands : npm i class-validator class-transformer @nestjs/passport passport-jwt (si besoin), npx prisma generate, npm run start:dev.
+CI/CD : Ajouter job à ci.yml : Test auth endpoints.
+Tests : npm test (focus auth folder).
+Checklist Sécu :
+Vérifier JWT secret rotation.
+Audit npm deps.
+Test guards sur endpoints.
+Logs audit activés.

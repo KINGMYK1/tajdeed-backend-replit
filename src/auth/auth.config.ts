@@ -1,33 +1,37 @@
 import { ConfigService } from '@nestjs/config';
-
-export interface BetterAuthConfig {
-  secret: string;
-  database: {
-    provider: 'postgresql';
-    url: string;
-  };
-  socialProviders: {
-    google: {
-      clientId: string;
-      clientSecret: string;
-    };
-  };
-}
+import { betterAuth } from 'better-auth';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { PrismaClient } from '@prisma/client';
 
 export const createBetterAuthConfig = (
   configService: ConfigService,
-): BetterAuthConfig => {
-  return {
-    secret: configService.get<string>('BETTER_AUTH_SECRET') || 'default-secret',
-    database: {
+  prisma: PrismaClient,
+) => {
+  return betterAuth({
+    database: prismaAdapter(prisma, {
       provider: 'postgresql',
-      url: configService.get<string>('DATABASE_URL') || 'postgresql://localhost:5432/tajdeed',
+    }),
+    emailAndPassword: {
+      enabled: false, // Désactivé pour se concentrer sur OAuth Google
     },
     socialProviders: {
       google: {
         clientId: configService.get<string>('GOOGLE_CLIENT_ID') || '',
         clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET') || '',
+        redirectURI: `${configService.get<string>('APP_URL', 'http://localhost:3000')}/auth/google/callback`,
       },
     },
-  };
+    session: {
+      expiresIn: 60 * 15, // 15 minutes pour l'access token
+      updateAge: 60 * 60 * 24, // 24 heures pour la session
+    },
+    advanced: {
+      generateId: () => crypto.randomUUID(),
+    },
+    logger: {
+      level: configService.get<string>('NODE_ENV') === 'development' ? 'debug' : 'error',
+    },
+  });
 };
+
+export type AuthInstance = ReturnType<typeof createBetterAuthConfig>;

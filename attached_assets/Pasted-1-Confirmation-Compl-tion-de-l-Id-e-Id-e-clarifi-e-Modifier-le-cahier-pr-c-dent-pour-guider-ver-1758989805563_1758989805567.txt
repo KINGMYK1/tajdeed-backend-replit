@@ -1,0 +1,88 @@
+1. Confirmation & Complétion de l'Idée
+Idée clarifiée : Modifier le cahier précédent pour guider vers l'étape suivante du MVP : Mise en place complète de l'auth et sécurité, en s'appuyant sur l'architecture existante (modules app/auth/common/prisma, Prisma schema avec AppUser/DeviceSession/Role, middlewares helmet/rate-limit). Focus simple/clair sur Better Auth (OAuth Google principal, sessions/refresh tokens), respect SOLID (e.g., services isolés pour auth logique, guards injectables). Ajout brainstorm : Intégrer guards JWT pour endpoints protégés, logs audit auto via Better Auth ; prioriser tests unitaires pour auth flow. Anticipe : Documentation endpoints dans README (exemples curl), changelog pour tracking avancement (e.g., v0.1.0: Auth basique).
+2. Cahier des Charges Client (1 Page)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SectionDescriptionTitreBackend Tajdeed MVP — Implémentation Auth & SécuritéObjectifÉtendre l'architecture existante pour une auth sécurisée via Better Auth (OAuth Google), sessions persistantes, refresh tokens. Permettre tests endpoints, préparer users/profils.EnjeuxConfiance utilisateurs cruciale pour marketplace (réduire churn 20% via sessions stables), éviter failles sécu (RGPD/CNDP compliance).Public CibleToi (dev full-stack Node/React), futurs users Tajdeed (vendeurs/acheteurs).MVP FonctionsAuth OAuth Google, login/refresh/logout, guards protégés, docs endpoints (curl exemples), changelog.KPISuccès auth >99%, temps réponse <150ms, 0 failles OWASP détectées, coverage tests auth >80%.ContraintesSOLID compliance (e.g., single responsibility par module), Supabase DB, timeline 8h. Budget : Free tools.
+3. Cahier Technique
+Stack Recommandée : NestJS (modulaire), Better Auth (OAuth Google, sessions/refresh), Prisma (ORM pour AppUser/DeviceSession), Supabase (DB). Raison : Match architecture actuelle, simplicité OAuth.
+Architecture Auth (SOLID) :
+
+Single Responsibility : Auth module gère seulement auth (config, controllers, services, guards). Common pour sécu générique (helmet/rate-limit).
+Open-Closed : Guards extensibles (e.g., pour 2FA futur sans modifier code existant).
+Liskov : Interfaces (e.g., IAuthService) substituables sans briser flux.
+Interface Segregation : Guards/dtos spécifiques (e.g., AuthGuard pour JWT seulement).
+Dependency Inversion : Services injectent PrismaService, pas couplage direct DB.
+Structure mise à jour :
+
+src/auth/ : auth.module.ts (imports), auth.controller.ts (endpoints), auth.service.ts (logique sessions/OAuth), auth.guard.ts (JWT validation), auth.config.ts (Better Auth setup).
+Intégration : AppModule importe AuthModule ; main.ts applique guards global si besoin.
+
+
+Flux : Client → Controller (DTO validation) → Service (Better Auth API + Prisma pour sessions) → DB Supabase.
+
+Endpoints Auth (Clairs/Simples) :
+
+POST /auth/google : Init OAuth Google (redirect URL).
+GET /auth/google/callback : Handle callback, crée session, retourne tokens.
+POST /auth/refresh : Refresh access token via refresh token.
+POST /auth/logout : Révoque session courante.
+GET /auth/me : Fetch user/session (protégé par guard).
+
+Sécurité :
+
+JWT via Better Auth (access 15min, refresh 30j).
+Rate-limit spécifique auth (5 req/15min pour login).
+Guards JWT sur endpoints protégés.
+Logs audit auto (Better Auth).
+Validation DTO (class-validator).
+
+Documentation Auth : Ajouter section README.md avec exemples curl/Postman :
+
+Ex. Login : curl -X POST http://localhost:3000/auth/google -d "code=google_code".
+Tests : Via Postman collection (ajouter fichier postman.json).
+
+Changelog : Créer CHANGELOG.md (format : ## v0.2.0 - Auth Implémentée [Date] - Features: ... - Fixes: ...).
+Priorités Ordre Dev :
+
+Config Better Auth + OAuth (3h).
+Controllers/Services/Guards (3h).
+Tests + Docs (2h).
+Changelog update (0.5h).
+
+CI/CD/Tests/Deploy : Jest pour unit (auth.service), Supertest intégration (endpoints). GH Actions : Test auth flow.
