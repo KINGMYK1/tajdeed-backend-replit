@@ -10,6 +10,114 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// === Better Auth Required Models ===
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  name             String?
+  emailVerified    Boolean   @default(false)
+  image            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  // Champs Tajdeed spécifiques
+  username         String?   @unique
+  role             Role      @default(USER)
+  status           UserStatus @default(ACTIVE)
+  
+  // Relations
+  accounts         Account[]
+  sessions         Session[]
+  moderationActions ModeratedUser[] @relation("ModeratedUser")
+  moderatorActions  ModeratedUser[] @relation("ModeratorUser")
+  warnings         UserWarning[]
+  
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Champs device session
+  deviceInfo   String?
+  ipAddress    String?
+  userAgent    String?
+  
+  @@map("sessions")
+}
+
+model VerificationToken {
+  id         String   @id @default(uuid())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  type       VerificationType @default(EMAIL_VERIFICATION)
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// === Modeles de Modération ===
+
+model ModeratedUser {
+  id           String           @id @default(uuid())
+  userId       String
+  moderatorId  String
+  action       ModerationAction
+  reason       String
+  duration     Int?             // Durée en heures pour les suspensions/bans temporaires
+  isActive     Boolean          @default(true)
+  evidence     String?          // URL ou description de preuve
+  notes        String?
+  createdAt    DateTime         @default(now())
+  expiresAt    DateTime?        // Date d'expiration pour les actions temporaires
+  
+  user         User             @relation("ModeratedUser", fields: [userId], references: [id], onDelete: Cascade)
+  moderator    User             @relation("ModeratorUser", fields: [moderatorId], references: [id])
+  
+  @@map("moderated_users")
+}
+
+model UserWarning {
+  id        String      @id @default(uuid())
+  userId    String
+  reason    String
+  severity  WarningSeverity @default(LOW)
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  expiresAt DateTime?   // Optionnel : certains avertissements peuvent expirer
+  
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_warnings")
+}
+
+// === Modèles Anciens (DeviceSession) - À migrer progressivement ===
+
 model AppUser {
   id        String          @id @default(uuid())
   username  String          @unique
@@ -32,7 +140,39 @@ model DeviceSession {
   @@map("device_sessions")
 }
 
+// === Enums ===
+
 enum Role {
   USER
+  MODERATOR
   ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_VERIFICATION
+}
+
+enum ModerationAction {
+  WARNING
+  TEMPORARY_SUSPENSION
+  PERMANENT_BAN
+  CONTENT_REMOVAL
+  ACCOUNT_RESTRICTION
+}
+
+enum WarningSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum VerificationType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  TWO_FACTOR_AUTH
 }

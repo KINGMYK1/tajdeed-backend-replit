@@ -2,12 +2,13 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from './common/config.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './auth/auth.module';
+import { ModerationModule } from './moderation/moderation.module';
 import { HelmetMiddleware } from './common/middlewares/helmet.middleware';
 import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware';
 import { AuthRateLimitMiddleware } from './common/middlewares/auth-rate-limit.middleware';
 
 @Module({
-  imports: [ConfigModule, AuthModule],
+  imports: [ConfigModule, AuthModule, ModerationModule],
   providers: [PrismaService],
   exports: [PrismaService],
 })

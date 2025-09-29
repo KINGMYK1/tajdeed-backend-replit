@@ -16,6 +16,7 @@ build = ["npm", "run", "build"]
 
 [agent]
 expertMode = true
+integrations = ["replitmail:1.0.0"]
 
 [workflows]
 runButton = "Project"
@@ -45,7 +46,3 @@ outputType = "console"
 localPort = 3000
 externalPort = 3000
 exposeLocalhost = true
-
-[[ports]]
-localPort = 44817
-externalPort = 80
