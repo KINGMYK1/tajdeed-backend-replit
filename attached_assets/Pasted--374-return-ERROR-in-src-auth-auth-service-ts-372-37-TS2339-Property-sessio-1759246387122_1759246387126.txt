@@ -1,0 +1,1006 @@
+
+    374 |         return {
+
+ERROR in ./src/auth/auth.service.ts:372:37
+TS2339: Property 'session' does not exist on type '{ status: boolean; user: { id: any; email: any; name: any; image: any; emailVerified: any; createdAt: any; updatedAt: any; }; }'.    
+    370 |       if (result.session) {
+    371 |         const accessToken = this.generateAccessToken(result.user.id, result.session.id);
+  > 372 |         const refreshToken = result.session.token;
+        |                                     ^^^^^^^
+    373 |
+    374 |         return {
+    375 |           autoSignIn: true,
+
+ERROR in ./src/auth/auth.service.ts:398:45
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    396 |   async resendVerificationEmail(email: string): Promise<void> {
+    397 |     try {
+  > 398 |       const user = await this.prismaService.user.findUnique({
+        |                                             ^^^^
+    399 |         where: { email },
+    400 |       });
+    401 |
+
+ERROR in ./src/auth/auth.service.ts:412:32
+TS2339: Property 'verificationToken' does not exist on type 'PrismaService'.
+    410 |
+    411 |       // Supprimer les anciens tokens
+  > 412 |       await this.prismaService.verificationToken.deleteMany({
+        |                                ^^^^^^^^^^^^^^^^^
+    413 |         where: {
+    414 |           identifier: email,
+    415 |           type: VerificationType.EMAIL_VERIFICATION,
+
+ERROR in ./src/auth/auth.service.ts:423:32
+TS2339: Property 'verificationToken' does not exist on type 'PrismaService'.
+    421 |       const expiresAt = new Date(Date.now() + 3600000); // 1 heure
+    422 |
+  > 423 |       await this.prismaService.verificationToken.create({
+        |                                ^^^^^^^^^^^^^^^^^
+    424 |         data: {
+    425 |           identifier: email,
+    426 |           token: verificationToken,
+
+ERROR in ./src/auth/auth.service.ts:454:11
+TS2353: Object literal may only specify known properties, and 'callbackURL' does not exist in type '{ email: string; redirectTo?: string | undefined; }'.
+    452 |         body: {
+    453 |           email,
+  > 454 |           callbackURL: `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/reset-password`,
+        |           ^^^^^^^^^^^
+    455 |         },
+    456 |       });
+    457 |
+
+ERROR in ./src/auth/auth.service.ts:477:11
+TS2353: Object literal may only specify known properties, and 'password' does not exist in type '{ newPassword: string; token?: string | undefined; }'.
+    475 |         body: {
+    476 |           token,
+  > 477 |           password: newPassword,
+        |           ^^^^^^^^
+    478 |         },
+    479 |       });
+    480 |
+
+ERROR in ./src/auth/auth.service.ts:481:30
+TS2339: Property 'user' does not exist on type '{ status: boolean; }'.
+    479 |       });
+    480 |
+  > 481 |       if (!result || !result.user) {
+        |                              ^^^^
+    482 |         throw new BadRequestException('Token de réinitialisation invalide ou expiré');
+    483 |       }
+    484 |
+
+ERROR in ./src/auth/auth.service.ts:510:37
+TS2339: Property 'session' does not exist on type 'PrismaService'.
+    508 |    */
+    509 |   private async createUserSession(userId: string): Promise<any> {
+  > 510 |     return await this.prismaService.session.create({
+        |                                     ^^^^^^^
+    511 |       data: {
+    512 |         userId,
+    513 |         sessionToken: 'temp',
+
+ERROR in ./src/auth/interfaces/auth.interface.ts:1:19
+TS2305: Module '"@prisma/client"' has no exported member 'User'.
+  > 1 | import { AppUser, User } from '@prisma/client';
+      |                   ^^^^
+    2 | import { RegisterDto, LoginDto } from '../dto/auth.dto';
+    3 |
+    4 | export interface IAuthService {
+
+ERROR in ./src/moderation/moderation.service.ts:4:3
+TS2305: Module '"@prisma/client"' has no exported member 'ModerationAction'.
+    2 | import { PrismaService } from '../prisma/prisma.service';
+    3 | import {
+  > 4 |   ModerationAction,
+      |   ^^^^^^^^^^^^^^^^
+    5 |   WarningSeverity,
+    6 |   UserStatus,
+    7 |   Role
+
+ERROR in ./src/moderation/moderation.service.ts:5:3
+TS2305: Module '"@prisma/client"' has no exported member 'WarningSeverity'.
+    3 | import {
+    4 |   ModerationAction,
+  > 5 |   WarningSeverity,
+      |   ^^^^^^^^^^^^^^^
+    6 |   UserStatus,
+    7 |   Role
+    8 | } from '@prisma/client';
+
+ERROR in ./src/moderation/moderation.service.ts:6:3
+TS2305: Module '"@prisma/client"' has no exported member 'UserStatus'.
+    4 |   ModerationAction,
+    5 |   WarningSeverity,
+  > 6 |   UserStatus,
+      |   ^^^^^^^^^^
+    7 |   Role
+    8 | } from '@prisma/client';
+    9 | import { ModerationActionDto, UserWarningDto } from '../auth/dto/auth.dto';
+
+ERROR in ./src/moderation/moderation.service.ts:46:55
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    44 |
+    45 |     // Créer l'action de modération
+  > 46 |     const moderationAction = await this.prismaService.moderatedUser.create({
+       |                                                       ^^^^^^^^^^^^^
+    47 |       data: {
+    48 |         userId: actionDto.userId,
+    49 |         moderatorId,
+
+ERROR in ./src/moderation/moderation.service.ts:84:46
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    82 |
+    83 |     // Créer l'avertissement
+  > 84 |     const warning = await this.prismaService.userWarning.create({
+       |                                              ^^^^^^^^^^^
+    85 |       data: {
+    86 |         userId: warningDto.userId,
+    87 |         reason: warningDto.reason,
+
+ERROR in ./src/moderation/moderation.service.ts:107:43
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    105 |     currentStatus: string;
+    106 |   }> {
+  > 107 |     const user = await this.prismaService.user.findUnique({
+        |                                           ^^^^
+    108 |       where: { id: userId },
+    109 |       select: { status: true },
+    110 |     });
+
+ERROR in ./src/moderation/moderation.service.ts:117:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    115 |
+    116 |     const [moderationActions, warnings] = await Promise.all([
+  > 117 |       this.prismaService.moderatedUser.findMany({
+        |                          ^^^^^^^^^^^^^
+    118 |         where: { userId },
+    119 |         include: {
+    120 |           moderator: {
+
+ERROR in ./src/moderation/moderation.service.ts:126:26
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    124 |         orderBy: { createdAt: 'desc' },
+    125 |       }),
+  > 126 |       this.prismaService.userWarning.findMany({
+        |                          ^^^^^^^^^^^
+    127 |         where: { userId },
+    128 |         orderBy: { createdAt: 'desc' },
+    129 |       }),
+
+ERROR in ./src/moderation/moderation.service.ts:166:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    164 |
+    165 |     const [users, total] = await Promise.all([
+  > 166 |       this.prismaService.moderatedUser.findMany({
+        |                          ^^^^^^^^^^^^^
+    167 |         where: whereClause,
+    168 |         include: {
+    169 |           user: {
+
+ERROR in ./src/moderation/moderation.service.ts:187:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    185 |         take: filters.limit,
+    186 |       }),
+  > 187 |       this.prismaService.moderatedUser.count({ where: whereClause }),
+        |                          ^^^^^^^^^^^^^
+    188 |     ]);
+    189 |
+    190 |     return {
+
+ERROR in ./src/moderation/moderation.service.ts:206:45
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    204 |     reason: string,
+    205 |   ): Promise<void> {
+  > 206 |     const action = await this.prismaService.moderatedUser.findUnique({
+        |                                             ^^^^^^^^^^^^^
+    207 |       where: { id: actionId },
+    208 |       include: { user: true },
+    209 |     });
+
+ERROR in ./src/moderation/moderation.service.ts:220:30
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    218 |
+    219 |     // Marquer l'action comme inactive
+  > 220 |     await this.prismaService.moderatedUser.update({
+        |                              ^^^^^^^^^^^^^
+    221 |       where: { id: actionId },
+    222 |       data: {
+    223 |         isActive: false,
+
+ERROR in ./src/moderation/moderation.service.ts:231:32
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    229 |     if (action.action === ModerationAction.PERMANENT_BAN ||
+    230 |         action.action === ModerationAction.TEMPORARY_SUSPENSION) {
+  > 231 |       await this.prismaService.user.update({
+        |                                ^^^^
+    232 |         where: { id: action.userId },
+    233 |         data: { status: UserStatus.ACTIVE },
+    234 |       });
+
+ERROR in ./src/moderation/moderation.service.ts:264:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    262 |       topReasonsRaw,
+    263 |     ] = await Promise.all([
+  > 264 |       this.prismaService.moderatedUser.count(),
+        |                          ^^^^^^^^^^^^^
+    265 |       this.prismaService.userWarning.count({
+    266 |         where: {
+    267 |           isRead: false,
+
+ERROR in ./src/moderation/moderation.service.ts:265:26
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    263 |     ] = await Promise.all([
+    264 |       this.prismaService.moderatedUser.count(),
+  > 265 |       this.prismaService.userWarning.count({
+        |                          ^^^^^^^^^^^
+    266 |         where: {
+    267 |           isRead: false,
+    268 |           OR: [
+
+ERROR in ./src/moderation/moderation.service.ts:274:26
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    272 |         },
+    273 |       }),
+  > 274 |       this.prismaService.user.count({
+        |                          ^^^^
+    275 |         where: { status: UserStatus.BANNED },
+    276 |       }),
+    277 |       this.prismaService.user.count({
+
+ERROR in ./src/moderation/moderation.service.ts:277:26
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    275 |         where: { status: UserStatus.BANNED },
+    276 |       }),
+  > 277 |       this.prismaService.user.count({
+        |                          ^^^^
+    278 |         where: { status: UserStatus.SUSPENDED },
+    279 |       }),
+    280 |       this.prismaService.moderatedUser.count({
+
+ERROR in ./src/moderation/moderation.service.ts:280:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    278 |         where: { status: UserStatus.SUSPENDED },
+    279 |       }),
+  > 280 |       this.prismaService.moderatedUser.count({
+        |                          ^^^^^^^^^^^^^
+    281 |         where: { createdAt: { gte: startOfMonth } },
+    282 |       }),
+    283 |       this.prismaService.moderatedUser.groupBy({
+
+ERROR in ./src/moderation/moderation.service.ts:283:26
+TS2339: Property 'moderatedUser' does not exist on type 'PrismaService'.
+    281 |         where: { createdAt: { gte: startOfMonth } },
+    282 |       }),
+  > 283 |       this.prismaService.moderatedUser.groupBy({
+        |                          ^^^^^^^^^^^^^
+    284 |         by: ['reason'],
+    285 |         _count: { reason: true },
+    286 |         orderBy: { _count: { reason: 'desc' } },
+
+ERROR in ./src/moderation/moderation.service.ts:291:42
+TS7006: Parameter 'item' implicitly has an 'any' type.
+    289 |     ]);
+    290 |
+  > 291 |     const topReasons = topReasonsRaw.map(item => ({
+        |                                          ^^^^
+    292 |       reason: item.reason,
+    293 |       count: item._count.reason,
+    294 |     }));
+
+ERROR in ./src/moderation/moderation.service.ts:314:26
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    312 |   }> {
+    313 |     const [warnings, unreadCount] = await Promise.all([
+  > 314 |       this.prismaService.userWarning.findMany({
+        |                          ^^^^^^^^^^^
+    315 |         where: {
+    316 |           userId,
+    317 |           OR: [
+
+ERROR in ./src/moderation/moderation.service.ts:324:26
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    322 |         orderBy: { createdAt: 'desc' },
+    323 |       }),
+  > 324 |       this.prismaService.userWarning.count({
+        |                          ^^^^^^^^^^^
+    325 |         where: {
+    326 |           userId,
+    327 |           isRead: false,
+
+ERROR in ./src/moderation/moderation.service.ts:343:30
+TS2339: Property 'userWarning' does not exist on type 'PrismaService'.
+    341 |    */
+    342 |   async markWarningsAsRead(userId: string): Promise<void> {
+  > 343 |     await this.prismaService.userWarning.updateMany({
+        |                              ^^^^^^^^^^^
+    344 |       where: {
+    345 |         userId,
+    346 |         isRead: false,
+
+ERROR in ./src/moderation/moderation.service.ts:367:49
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    365 |   ): Promise<void> {
+    366 |     // Vérifier que l'utilisateur cible existe
+  > 367 |     const targetUser = await this.prismaService.user.findUnique({
+        |                                                 ^^^^
+    368 |       where: { id: userId },
+    369 |       select: { id: true, role: true, status: true },
+    370 |     });
+
+ERROR in ./src/moderation/moderation.service.ts:377:48
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    375 |
+    376 |     // Vérifier que le modérateur existe et a les permissions
+  > 377 |     const moderator = await this.prismaService.user.findUnique({
+        |                                                ^^^^
+    378 |       where: { id: moderatorId },
+    379 |       select: { id: true, role: true },
+    380 |     });
+
+ERROR in ./src/moderation/moderation.service.ts:392:67
+TS2339: Property 'SUPER_ADMIN' does not exist on type '{ USER: "USER"; ADMIN: "ADMIN"; }'.
+    390 |
+    391 |     // Vérifier les permissions selon la hiérarchie des rôles
+  > 392 |     if (targetUser.role === Role.ADMIN && moderator.role !== Role.SUPER_ADMIN) {
+        |                                                                   ^^^^^^^^^^^
+    393 |       throw new ForbiddenException('Seuls les super administrateurs peuvent modérer les administrateurs');
+    394 |     }
+    395 |
+
+ERROR in ./src/moderation/moderation.service.ts:396:34
+TS2339: Property 'SUPER_ADMIN' does not exist on type '{ USER: "USER"; ADMIN: "ADMIN"; }'.
+    394 |     }
+    395 |
+  > 396 |     if (targetUser.role === Role.SUPER_ADMIN) {
+        |                                  ^^^^^^^^^^^
+    397 |       throw new ForbiddenException('Les super administrateurs ne peuvent pas être modérés');
+    398 |     }
+    399 |
+
+ERROR in ./src/moderation/moderation.service.ts:401:63
+TS2339: Property 'MODERATOR' does not exist on type '{ USER: "USER"; ADMIN: "ADMIN"; }'.
+    399 |
+    400 |     // Vérifier les permissions spécifiques selon l'action
+  > 401 |     if (action === 'PERMANENT_BAN' && moderator.role === Role.MODERATOR) {
+        |                                                               ^^^^^^^^^
+    402 |       throw new ForbiddenException('Seuls les administrateurs peuvent bannir définitivement');
+    403 |     }
+    404 |   }
+
+ERROR in ./src/moderation/moderation.service.ts:426:32
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    424 |
+    425 |     if (newStatus) {
+  > 426 |       await this.prismaService.user.update({
+        |                                ^^^^
+    427 |         where: { id: userId },
+    428 |         data: { status: newStatus },
+    429 |       });
+
+ERROR in ./src/moderation/moderation.service.ts:442:45
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    440 |   ): Promise<void> {
+    441 |     try {
+  > 442 |       const user = await this.prismaService.user.findUnique({
+        |                                             ^^^^
+    443 |         where: { id: userId },
+    444 |         select: { email: true, name: true },
+    445 |       });
+
+ERROR in ./src/moderation/moderation.service.ts:459:36
+TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+    457 |       };
+    458 |
+  > 459 |       const subject = `Tajdeed - ${actionMessages[action] || 'Action de modération'}`;
+        |                                    ^^^^^^^^^^^^^^^^^^^^^^
+    460 |
+    461 |       await sendEmail({
+    462 |         to: user.email,
+
+ERROR in ./src/moderation/moderation.service.ts:468:26
+TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+    466 |             <h1 style="color: #d73027;">Notification de modération - Tajdeed</h1>
+    467 |             <p>Bonjour ${user.name || ''},</p>
+  > 468 |             <p><strong>${actionMessages[action] || 'Une action de modération a été appliquée'}</strong></p>
+        |                          ^^^^^^^^^^^^^^^^^^^^^^
+    469 |             <p><strong>Raison :</strong> ${reason}</p>
+    470 |             <p>Si vous pensez que cette action est injustifiée, vous pouvez contacter notre équipe de support.</p>
+    471 |             <hr style="margin: 20px 0;">
+
+ERROR in ./src/moderation/moderation.service.ts:475:58
+TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ WARNING: string; TEMPORARY_SUSPENSION: string; PERMANENT_BAN: string; CONTENT_REMOVAL: string; ACCOUNT_RESTRICTION: string; }'.
+    473 |           </div>
+    474 |         `,
+  > 475 |         text: `Notification de modération - Tajdeed\n\n${actionMessages[action] || 'Une action de modération a été appliquée'}\n\nRaison: ${reason}\n\nSi vous pensez que cette action est injustifiée, contactez notre support.\n\nÉquipe Modération Tajdeed`,
+        |                                                          ^^^^^^^^^^^^^^^^^^^^^^
+    476 |       });
+    477 |     } catch (error) {
+    478 |       console.error('Erreur envoi email modération:', error);
+
+ERROR in ./src/moderation/moderation.service.ts:491:45
+TS2339: Property 'user' does not exist on type 'PrismaService'.
+    489 |   ): Promise<void> {
+    490 |     try {
+  > 491 |       const user = await this.prismaService.user.findUnique({
+        |                                             ^^^^
+    492 |         where: { id: userId },
+    493 |         select: { email: true, name: true },
+    494 |       });
+
+ERROR in ./src/moderation/moderation.service.ts:512:33
+TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ LOW: string; MEDIUM: string; HIGH: string; CRITICAL: string; }'.        
+  No index signature with a parameter of type 'string' was found on type '{ LOW: string; MEDIUM: string; HIGH: string; CRITICAL: string; }'.
+    510 |         html: `
+    511 |           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  > 512 |             <h1 style="color: ${severityColors[severity]};">Avertissement - Tajdeed</h1>
+        |                                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    513 |             <p>Bonjour ${user.name || ''},</p>
+    514 |             <p>Vous avez reçu un avertissement de niveau <strong style="color: ${severityColors[severity]};">${severity}</strong>.</p>
+    515 |             <p><strong>Raison :</strong> ${reason}</p>
+
+ERROR in ./src/moderation/moderation.service.ts:514:82
+TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ LOW: string; MEDIUM: string; HIGH: string; CRITICAL: string; }'.        
+  No index signature with a parameter of type 'string' was found on type '{ LOW: string; MEDIUM: string; HIGH: string; CRITICAL: string; }'.
+    512 |             <h1 style="color: ${severityColors[severity]};">Avertissement - Tajdeed</h1>
+    513 |             <p>Bonjour ${user.name || ''},</p>
+  > 514 |             <p>Vous avez reçu un avertissement de niveau <strong style="color: ${severityColors[severity]};">${severity}</strong>.</p>
+        |                                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+    515 |             <p><strong>Raison :</strong> ${reason}</p>
+    516 |             <p>Veuillez prendre en compte cet avertissement pour éviter d'autres mesures disciplinaires.</p>
+    517 |             <hr style="margin: 20px 0;">
+
+ERROR in ./test/auth.e2e-spec.ts:95:51
+TS2304: Cannot find name 'autorisation'.
+    93 |         .expect(400)
+    94 |         .expect((res) => {
+  > 95 |           expect(res.body.message).toBe('Code d\\'autorisation manquant');
+       |                                                   ^^^^^^^^^^^^
+    96 |         });
+    97 |     });
+    98 |   });
+
+ERROR in ./test/auth.e2e-spec.ts:95:51
+TS2554: Expected 1 arguments, but got 4.
+    93 |         .expect(400)
+    94 |         .expect((res) => {
+  > 95 |           expect(res.body.message).toBe('Code d\\'autorisation manquant');
+       |                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+    96 |         });
+    97 |     });
+    98 |   });
+
+ERROR in ./test/auth.e2e-spec.ts:95:64
+TS2304: Cannot find name 'manquant'.
+    93 |         .expect(400)
+    94 |         .expect((res) => {
+  > 95 |           expect(res.body.message).toBe('Code d\\'autorisation manquant');
+       |                                                                ^^^^^^^^
+    96 |         });
+    97 |     });
+    98 |   });
+
+ERROR in ./test/auth.e2e-spec.ts:127:46
+TS2304: Cannot find name 'autorisation'.
+    125 |     });
+    126 |
+  > 127 |     it('devrait retourner 401 sans token d\\'autorisation', () => {
+        |                                              ^^^^^^^^^^^^
+    128 |       return request(app.getHttpServer())
+    129 |         .get('/auth/me')
+    130 |         .expect(401)
+
+ERROR in ./test/auth.e2e-spec.ts:127:58
+TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+    125 |     });
+    126 |
+  > 127 |     it('devrait retourner 401 sans token d\\'autorisation', () => {
+        |                                                          ^^^^^^^^^^
+    128 |       return request(app.getHttpServer())
+    129 |         .get('/auth/me')
+    130 |         .expect(401)
+
+ERROR in ./test/auth.e2e-spec.ts:132:52
+TS2304: Cannot find name 'accès'.
+    130 |         .expect(401)
+    131 |         .expect((res) => {
+  > 132 |           expect(res.body.message).toBe('Token d\\'accès manquant');
+        |                                                    ^^^^^
+    133 |         });
+    134 |     });
+    135 |
+
+ERROR in ./test/auth.e2e-spec.ts:132:52
+TS2554: Expected 1 arguments, but got 4.
+    130 |         .expect(401)
+    131 |         .expect((res) => {
+  > 132 |           expect(res.body.message).toBe('Token d\\'accès manquant');
+        |                                                    ^^^^^^^^^^^^^^^^^
+    133 |         });
+    134 |     });
+    135 |
+
+ERROR in ./test/auth.e2e-spec.ts:132:58
+TS2304: Cannot find name 'manquant'.
+    130 |         .expect(401)
+    131 |         .expect((res) => {
+  > 132 |           expect(res.body.message).toBe('Token d\\'accès manquant');
+        |                                                          ^^^^^^^^
+    133 |         });
+    134 |     });
+    135 |
+
+ERROR in ./test/auth.e2e-spec.ts:150:38
+TS2304: Cannot find name 'app'.
+    148 |     beforeEach(async () => {
+    149 |       // Créer un utilisateur et obtenir des tokens
+  > 150 |       const response = await request(app.getHttpServer())
+        |                                      ^^^
+    151 |         .post('/auth/google')
+    152 |         .send({ code: 'test-refresh-setup' });
+    153 |
+
+ERROR in ./test/auth.e2e-spec.ts:154:7
+TS2304: Cannot find name 'authTokens'.
+    152 |         .send({ code: 'test-refresh-setup' });
+    153 |
+  > 154 |       authTokens = {
+        |       ^^^^^^^^^^
+    155 |         accessToken: response.body.accessToken,
+    156 |         refreshToken: response.body.refreshToken,
+    157 |       };
+
+ERROR in ./test/auth.e2e-spec.ts:161:22
+TS2304: Cannot find name 'app'.
+    159 |
+    160 |     it('devrait renouveler les tokens avec un refresh token valide', () => {
+  > 161 |       return request(app.getHttpServer())
+        |                      ^^^
+    162 |         .post('/auth/refresh')
+    163 |         .send({ refreshToken: authTokens.refreshToken })
+    164 |         .expect(200)
+
+ERROR in ./test/auth.e2e-spec.ts:163:31
+TS2304: Cannot find name 'authTokens'.
+    161 |       return request(app.getHttpServer())
+    162 |         .post('/auth/refresh')
+  > 163 |         .send({ refreshToken: authTokens.refreshToken })
+        |                               ^^^^^^^^^^
+    164 |         .expect(200)
+    165 |         .expect((res) => {
+    166 |           expect(res.body).toHaveProperty('accessToken');
+
+ERROR in ./test/auth.e2e-spec.ts:172:49
+TS2304: Cannot find name 'authTokens'.
+    170 |
+    171 |           // Le nouveau token devrait être différent
+  > 172 |           expect(res.body.accessToken).not.toBe(authTokens.accessToken);
+        |                                                 ^^^^^^^^^^
+    173 |           expect(res.body.refreshToken).not.toBe(authTokens.refreshToken);
+    174 |         });
+    175 |     });
+
+ERROR in ./test/auth.e2e-spec.ts:173:50
+TS2304: Cannot find name 'authTokens'.
+    171 |           // Le nouveau token devrait être différent
+    172 |           expect(res.body.accessToken).not.toBe(authTokens.accessToken);
+  > 173 |           expect(res.body.refreshToken).not.toBe(authTokens.refreshToken);
+        |                                                  ^^^^^^^^^^
+    174 |         });
+    175 |     });
+    176 |
+
+ERROR in ./test/auth.e2e-spec.ts:178:22
+TS2304: Cannot find name 'app'.
+    176 |
+    177 |     it('devrait retourner 401 avec un refresh token invalide', () => {
+  > 178 |       return request(app.getHttpServer())
+        |                      ^^^
+    179 |         .post('/auth/refresh')
+    180 |         .send({ refreshToken: 'invalid-refresh-token' })
+    181 |         .expect(401)
+
+ERROR in ./test/auth.e2e-spec.ts:188:22
+TS2304: Cannot find name 'app'.
+    186 |
+    187 |     it('devrait retourner 400 pour un body invalide', () => {
+  > 188 |       return request(app.getHttpServer())
+        |                      ^^^
+    189 |         .post('/auth/refresh')
+    190 |         .send({}) // Body vide
+    191 |         .expect(400);
+
+ERROR in ./test/auth.e2e-spec.ts:198:38
+TS2304: Cannot find name 'app'.
+    196 |     beforeEach(async () => {
+    197 |       // Créer un utilisateur et obtenir des tokens
+  > 198 |       const response = await request(app.getHttpServer())
+        |                                      ^^^
+    199 |         .post('/auth/google')
+    200 |         .send({ code: 'test-logout-setup' });
+    201 |
+
+ERROR in ./test/auth.e2e-spec.ts:202:7
+TS2304: Cannot find name 'authTokens'.
+    200 |         .send({ code: 'test-logout-setup' });
+    201 |
+  > 202 |       authTokens = {
+        |       ^^^^^^^^^^
+    203 |         accessToken: response.body.accessToken,
+    204 |         refreshToken: response.body.refreshToken,
+    205 |       };
+
+ERROR in ./test/auth.e2e-spec.ts:208:33
+TS2304: Cannot find name 'utilisateur'.
+    206 |     });
+    207 |
+  > 208 |     it('devrait déconnecter l\\'utilisateur avec succès', () => {
+        |                                 ^^^^^^^^^^^
+    209 |       return request(app.getHttpServer())
+    210 |         .post('/auth/logout')
+    211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+
+ERROR in ./test/auth.e2e-spec.ts:208:45
+TS2304: Cannot find name 'avec'.
+    206 |     });
+    207 |
+  > 208 |     it('devrait déconnecter l\\'utilisateur avec succès', () => {
+        |                                             ^^^^
+    209 |       return request(app.getHttpServer())
+    210 |         .post('/auth/logout')
+    211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+
+ERROR in ./test/auth.e2e-spec.ts:208:50
+TS2304: Cannot find name 'succès'.
+    206 |     });
+    207 |
+  > 208 |     it('devrait déconnecter l\\'utilisateur avec succès', () => {
+        |                                                  ^^^^^^
+    209 |       return request(app.getHttpServer())
+    210 |         .post('/auth/logout')
+    211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+
+ERROR in ./test/auth.e2e-spec.ts:208:50
+TS2554: Expected 1-3 arguments, but got 5.
+    206 |     });
+    207 |
+  > 208 |     it('devrait déconnecter l\\'utilisateur avec succès', () => {
+        |                                                  ^^^^^^^^^^^^^^^^
+    209 |       return request(app.getHttpServer())
+    210 |         .post('/auth/logout')
+    211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+
+ERROR in ./test/auth.e2e-spec.ts:209:22
+TS2304: Cannot find name 'app'.
+    207 |
+    208 |     it('devrait déconnecter l\\'utilisateur avec succès', () => {
+  > 209 |       return request(app.getHttpServer())
+        |                      ^^^
+    210 |         .post('/auth/logout')
+    211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+    212 |         .expect(204);
+
+ERROR in ./test/auth.e2e-spec.ts:211:41
+TS2304: Cannot find name 'authTokens'.
+    209 |       return request(app.getHttpServer())
+    210 |         .post('/auth/logout')
+  > 211 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+        |                                         ^^^^^^^^^^
+    212 |         .expect(204);
+    213 |     });
+    214 |
+
+ERROR in ./test/auth.e2e-spec.ts:215:46
+TS2304: Cannot find name 'autorisation'.
+    213 |     });
+    214 |
+  > 215 |     it('devrait retourner 401 sans token d\\'autorisation', () => {
+        |                                              ^^^^^^^^^^^^
+    216 |       return request(app.getHttpServer())
+    217 |         .post('/auth/logout')
+    218 |         .expect(401)
+
+ERROR in ./test/auth.e2e-spec.ts:215:58
+TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+    213 |     });
+    214 |
+  > 215 |     it('devrait retourner 401 sans token d\\'autorisation', () => {
+        |                                                          ^^^^^^^^^^
+    216 |       return request(app.getHttpServer())
+    217 |         .post('/auth/logout')
+    218 |         .expect(401)
+
+ERROR in ./test/auth.e2e-spec.ts:224:13
+TS2304: Cannot find name 'accès'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |             ^^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:224:19
+TS2304: Cannot find name 'devrait'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                   ^^^^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:224:27
+TS2304: Cannot find name 'être'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                           ^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:224:27
+TS2554: Expected 1-3 arguments, but got 9.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 225 |       // Déconnexion
+        | ^^^^^^^^^^^^^^^^^^^^
+  > 226 |       await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^
+  > 227 |         .post('/auth/logout')
+        | ^^^^^^^^^^^^^^^^^^^^
+  > 228 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+        | ^^^^^^^^^^^^^^^^^^^^
+  > 229 |         .expect(204);
+        | ^^^^^^^^^^^^^^^^^^^^^
+    230 |
+    231 |       // Tentative d'accès au profil après déconnexion
+    232 |       return request(app.getHttpServer())
+
+ERROR in ./test/auth.e2e-spec.ts:224:32
+TS2304: Cannot find name 'refusé'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                                ^^^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:224:39
+TS2304: Cannot find name 'après'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                                       ^^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:224:45
+TS2304: Cannot find name 'déconnexion'.
+    222 |     });
+    223 |
+  > 224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+        |                                             ^^^^^^^^^^^
+    225 |       // Déconnexion
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+
+ERROR in ./test/auth.e2e-spec.ts:226:21
+TS2304: Cannot find name 'app'.
+    224 |     it('l\\'accès devrait être refusé après déconnexion', async () => {
+    225 |       // Déconnexion
+  > 226 |       await request(app.getHttpServer())
+        |                     ^^^
+    227 |         .post('/auth/logout')
+    228 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+    229 |         .expect(204);
+
+ERROR in ./test/auth.e2e-spec.ts:228:41
+TS2304: Cannot find name 'authTokens'.
+    226 |       await request(app.getHttpServer())
+    227 |         .post('/auth/logout')
+  > 228 |         .set('Authorization', `Bearer ${authTokens.accessToken}`)
+        |                                         ^^^^^^^^^^
+    229 |         .expect(204);
+    230 |
+    231 |       // Tentative d'accès au profil après déconnexion
+
+ERROR in ./test/auth.e2e-spec.ts:239:22
+TS2304: Cannot find name 'authentification'.
+    237 |   });
+    238 |
+  > 239 |   describe('Flux d\\'authentification complet', () => {
+        |                      ^^^^^^^^^^^^^^^^
+    240 |     it('devrait permettre un cycle complet : connexion -> profil -> refresh -> déconnexion', async () => {
+    241 |       // 1. Connexion
+    242 |       const loginResponse = await request(app.getHttpServer())
+
+ERROR in ./test/auth.e2e-spec.ts:239:39
+TS2304: Cannot find name 'complet'.
+    237 |   });
+    238 |
+  > 239 |   describe('Flux d\\'authentification complet', () => {
+        |                                       ^^^^^^^
+    240 |     it('devrait permettre un cycle complet : connexion -> profil -> refresh -> déconnexion', async () => {
+    241 |       // 1. Connexion
+    242 |       const loginResponse = await request(app.getHttpServer())
+
+ERROR in ./test/auth.e2e-spec.ts:239:39
+TS2554: Expected 2 arguments, but got 5.
+    237 |   });
+    238 |
+  > 239 |   describe('Flux d\\'authentification complet', () => {
+        |                                       ^^^^^^^^^^^^^^^^^
+  > 240 |     it('devrait permettre un cycle complet : connexion -> profil -> refresh -> déconnexion', async () => {
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 241 |       // 1. Connexion
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 242 |       const loginResponse = await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 243 |         .post('/auth/google')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 244 |         .send({ code: 'test-full-flow' })
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 245 |         .expect(200);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 246 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 247 |       const tokens = {
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 248 |         accessToken: loginResponse.body.accessToken,
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 249 |         refreshToken: loginResponse.body.refreshToken,
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 250 |       };
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 251 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 252 |       // 2. Vérification du profil
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 253 |       await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 254 |         .get('/auth/me')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 255 |         .set('Authorization', `Bearer ${tokens.accessToken}`)
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 256 |         .expect(200);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 257 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 258 |       // 3. Renouvellement des tokens
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 259 |       const refreshResponse = await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 260 |         .post('/auth/refresh')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 261 |         .send({ refreshToken: tokens.refreshToken })
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 262 |         .expect(200);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 263 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 264 |       const newTokens = {
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 265 |         accessToken: refreshResponse.body.accessToken,
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 266 |         refreshToken: refreshResponse.body.refreshToken,
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 267 |       };
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 268 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 269 |       // 4. Vérification du profil avec nouveaux tokens
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 270 |       await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 271 |         .get('/auth/me')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 272 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 273 |         .expect(200);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 274 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 275 |       // 5. Déconnexion
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 276 |       await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 277 |         .post('/auth/logout')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 278 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 279 |         .expect(204);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 280 |
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 281 |       // 6. Vérification que l'accès est refusé après déconnexion
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 282 |       await request(app.getHttpServer())
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 283 |         .get('/auth/me')
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 284 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 285 |         .expect(401);
+        | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  > 286 |     });
+        | ^^^^^^^
+    287 |   });
+    288 | });
+
+ERROR in ./test/auth.e2e-spec.ts:242:43
+TS2304: Cannot find name 'app'.
+    240 |     it('devrait permettre un cycle complet : connexion -> profil -> refresh -> déconnexion', async () => {
+    241 |       // 1. Connexion
+  > 242 |       const loginResponse = await request(app.getHttpServer())
+        |                                           ^^^
+    243 |         .post('/auth/google')
+    244 |         .send({ code: 'test-full-flow' })
+    245 |         .expect(200);
+
+ERROR in ./test/auth.e2e-spec.ts:253:21
+TS2304: Cannot find name 'app'.
+    251 |
+    252 |       // 2. Vérification du profil
+  > 253 |       await request(app.getHttpServer())
+        |                     ^^^
+    254 |         .get('/auth/me')
+    255 |         .set('Authorization', `Bearer ${tokens.accessToken}`)
+    256 |         .expect(200);
+
+ERROR in ./test/auth.e2e-spec.ts:259:45
+TS2304: Cannot find name 'app'.
+    257 |
+    258 |       // 3. Renouvellement des tokens
+  > 259 |       const refreshResponse = await request(app.getHttpServer())
+        |                                             ^^^
+    260 |         .post('/auth/refresh')
+    261 |         .send({ refreshToken: tokens.refreshToken })
+    262 |         .expect(200);
+
+ERROR in ./test/auth.e2e-spec.ts:270:21
+TS2304: Cannot find name 'app'.
+    268 |
+    269 |       // 4. Vérification du profil avec nouveaux tokens
+  > 270 |       await request(app.getHttpServer())
+        |                     ^^^
+    271 |         .get('/auth/me')
+    272 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+    273 |         .expect(200);
+
+ERROR in ./test/auth.e2e-spec.ts:276:21
+TS2304: Cannot find name 'app'.
+    274 |
+    275 |       // 5. Déconnexion
+  > 276 |       await request(app.getHttpServer())
+        |                     ^^^
+    277 |         .post('/auth/logout')
+    278 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+    279 |         .expect(204);
+
+ERROR in ./test/auth.e2e-spec.ts:282:21
+TS2304: Cannot find name 'app'.
+    280 |
+    281 |       // 6. Vérification que l'accès est refusé après déconnexion
+  > 282 |       await request(app.getHttpServer())
+        |                     ^^^
+    283 |         .get('/auth/me')
+    284 |         .set('Authorization', `Bearer ${newTokens.accessToken}`)
+    285 |         .expect(401);
+
+webpack 5.97.1 compiled with 214 errors in 156736 ms
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
+
+D:\Tajdeed\tajdeed-backend-replit>
+D:\Tajdeed\tajdeed-backend-replit>
+D:\Tajdeed\tajdeed-backend-replit>

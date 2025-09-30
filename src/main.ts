@@ -9,7 +9,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 5000);
+  const port = configService.get<number>('PORT', 3000);
 
   // Security middlewares
   app.use(helmet({
@@ -48,8 +48,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(port, 'localhost');
-  console.log(`🚀 Tajdeed MVP Backend is running on: http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Tajdeed MVP Backend is running on: http://0.0.0.0:${port}`);
 }
 
 bootstrap();

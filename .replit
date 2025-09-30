@@ -34,15 +34,18 @@ args = "Backend Server"
 name = "Backend Server"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run start:dev"
 waitForPort = 3000
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[ports]]
 localPort = 3000
 externalPort = 3000
-exposeLocalhost = true
+
+[[ports]]
+localPort = 33563
+externalPort = 80
