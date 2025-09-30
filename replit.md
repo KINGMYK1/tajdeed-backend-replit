@@ -2,9 +2,33 @@
 
 Tajdeed MVP is a C2C marketplace backend built with NestJS and TypeScript. The application follows a modular architecture with clear separation of concerns, providing a foundation for a production-ready marketplace platform. It features user authentication, session management, and comprehensive security measures including rate limiting and security headers.
 
+**Status**: Fully configured and running on Replit (September 30, 2025)
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+# Replit Environment Setup
+
+## Configuration (September 30, 2025)
+- **Database**: Replit PostgreSQL (Neon-backed) connected via DATABASE_URL environment variable
+- **Server Port**: 3000 (backend API)
+- **Host Binding**: 0.0.0.0 (required for Replit environment)
+- **Workflow**: Backend Server running on `npm run start:dev`
+- **Deployment**: Configured for VM deployment with build and production start commands
+
+## Environment Variables
+The following environment variables are configured in .env:
+- `DATABASE_URL`: Replit PostgreSQL connection string
+- `BETTER_AUTH_SECRET`: Authentication secret key
+- `NODE_ENV`: Set to "development"
+- `PORT`: Set to 3000
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: Optional OAuth configuration
+
+## Known Issues
+- TypeScript type-checking shows warnings in auth.service.ts and moderation.service.ts related to Better Auth API types
+- E2E test files have TypeScript parsing issues due to French language strings (tests excluded from build)
+- These warnings don't prevent the application from running successfully
 
 # System Architecture
 
