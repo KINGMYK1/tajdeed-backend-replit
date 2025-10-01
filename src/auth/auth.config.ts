@@ -92,6 +92,7 @@ export const createBetterAuthConfig = (
     advanced: {
       generateId: () => crypto.randomUUID(),
     },
+    
     logger: {
       level: configService.get<string>('NODE_ENV') === 'development' ? 'debug' : 'error',
     },

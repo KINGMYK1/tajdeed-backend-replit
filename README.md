@@ -98,7 +98,6 @@ Copy `.env.example` to `.env` and configure:
 ### Endpoints
 
 #### POST /auth/google
-
 Initialise l'authentification OAuth Google.
 
 ```bash
@@ -108,11 +107,7 @@ curl -X POST http://localhost:3000/auth/google \
 ```
 
 **Response:**
-
-```json
 {
-  "accessToken": "access_userId_timestamp",
-  "refreshToken": "uuid.timestamp", 
   "user": {
     "id": "user_id",
     "username": "user@example.com",
@@ -141,7 +136,6 @@ curl -X POST http://localhost:3000/auth/refresh \
 ```
 
 #### GET /auth/me
-
 Récupère le profil utilisateur (protégé).
 
 ```bash
@@ -150,7 +144,6 @@ curl -X GET http://localhost:3000/auth/me \
 ```
 
 #### POST /auth/logout
-
 Déconnexion et révocation de session.
 
 ```bash

@@ -170,7 +170,6 @@ export class AuthService implements IAuthService {
   }
 
 
-
   private generateAccessToken(userId: string, sessionId: string): string {
     const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
     const payload = {
