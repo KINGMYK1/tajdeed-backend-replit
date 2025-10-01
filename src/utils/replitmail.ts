@@ -105,6 +105,7 @@ export async function sendEmail(message: SmtpMessage): Promise<{
     };
   } catch (error) {
     console.error('❌ Erreur lors de l\'envoi de l\'email:', error);
-    throw new Error(`Échec de l'envoi de l'email: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Échec de l'envoi de l'email: ${errorMessage}`);
   }
 }

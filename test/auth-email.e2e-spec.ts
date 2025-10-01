@@ -224,7 +224,7 @@ describe('Auth E2E Tests', () => {
           identifier: newUser.email,
           type: 'EMAIL_VERIFICATION'
         },
-        orderBy: { expires: 'desc' },
+        orderBy: { expiresAt: 'desc' },
       });
 
       expect(newToken).toBeDefined();
@@ -392,7 +392,7 @@ describe('Auth E2E Tests', () => {
           identifier: testUser.email,
           type: 'PASSWORD_RESET'
         },
-        orderBy: { expires: 'desc' },
+        orderBy: { expiresAt: 'desc' },
       });
 
       expect(resetTokenRecord).toBeDefined();
@@ -464,7 +464,7 @@ describe('Auth E2E Tests', () => {
           identifier: testUser.email,
           type: 'PASSWORD_RESET'
         },
-        orderBy: { expires: 'desc' },
+        orderBy: { expiresAt: 'desc' },
       });
 
       expect(newResetToken).toBeDefined();
