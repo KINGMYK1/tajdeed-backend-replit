@@ -288,7 +288,7 @@ export class ModerationService {
       }),
     ]);
 
-    const topReasons = topReasonsRaw.map(item => ({
+    const topReasons = topReasonsRaw.map((item: any) => ({
       reason: item.reason,
       count: item._count.reason,
     }));
@@ -389,17 +389,14 @@ export class ModerationService {
     }
 
     // Vérifier les permissions selon la hiérarchie des rôles
-    if (targetUser.role === Role.ADMIN && moderator.role !== Role.SUPER_ADMIN) {
-      throw new ForbiddenException('Seuls les super administrateurs peuvent modérer les administrateurs');
+    // Seuls les ADMINs peuvent modérer
+    if (moderator.role !== Role.ADMIN) {
+      throw new ForbiddenException('Seuls les administrateurs peuvent effectuer des actions de modération');
     }
 
-    if (targetUser.role === Role.SUPER_ADMIN) {
-      throw new ForbiddenException('Les super administrateurs ne peuvent pas être modérés');
-    }
-
-    // Vérifier les permissions spécifiques selon l'action
-    if (action === 'PERMANENT_BAN' && moderator.role === Role.MODERATOR) {
-      throw new ForbiddenException('Seuls les administrateurs peuvent bannir définitivement');
+    // Les administrateurs ne peuvent pas modérer d'autres administrateurs
+    if (targetUser.role === Role.ADMIN) {
+      throw new ForbiddenException('Les administrateurs ne peuvent pas modérer d\'autres administrateurs');
     }
   }
 
@@ -448,7 +445,7 @@ export class ModerationService {
 
       const { sendEmail } = await import('../utils/replitmail');
       
-      const actionMessages = {
+      const actionMessages: { [key: string]: string } = {
         WARNING: 'Vous avez reçu un avertissement',
         TEMPORARY_SUSPENSION: 'Votre compte a été temporairement suspendu',
         PERMANENT_BAN: 'Votre compte a été définitivement banni',
@@ -495,7 +492,7 @@ export class ModerationService {
 
       if (!user) return;
 
-      const severityColors = {
+      const severityColors: { [key: string]: string } = {
         LOW: '#ffc107',
         MEDIUM: '#fd7e14',
         HIGH: '#dc3545',

@@ -40,7 +40,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       user: {
         id: result.user.id,
-        username: result.user.username,
+        username: result.user.username || result.user.email,
         role: result.user.role,
       },
       expiresIn: result.expiresIn,
@@ -77,7 +77,7 @@ export class AuthController {
       refreshToken: result.refreshToken,
       user: {
         id: result.user.id,
-        username: result.user.username,
+        username: result.user.username || result.user.email,
         role: result.user.role,
       },
       expiresIn: result.expiresIn,

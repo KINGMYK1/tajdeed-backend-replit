@@ -1,4 +1,5 @@
 import { z } from "zod";
+import * as nodemailer from 'nodemailer';
 
 // Zod schema matching the backend implementation
 export const zSmtpMessage = z.object({
@@ -29,22 +30,32 @@ export const zSmtpMessage = z.object({
 
 export type SmtpMessage = z.infer<typeof zSmtpMessage>
 
-function getAuthToken(): string {
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-      ? "depl " + process.env.WEB_REPL_RENEWAL
-      : null;
+/**
+ * Crée un transporteur Nodemailer avec configuration Mailtrap/SMTP
+ */
+function createTransporter() {
+  const config = {
+    host: process.env.EMAIL_HOST || 'sandbox.smtp.mailtrap.io',
+    port: parseInt(process.env.EMAIL_PORT || '587', 10),
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  };
 
-  if (!xReplitToken) {
+  if (!config.auth.user || !config.auth.pass) {
     throw new Error(
-      "No authentication token found. Please set REPL_IDENTITY or ensure you're running in Replit environment."
+      'Configuration email manquante. Veuillez définir EMAIL_USER et EMAIL_PASSWORD dans .env'
     );
   }
 
-  return xReplitToken;
+  return nodemailer.createTransport(config);
 }
 
+/**
+ * Envoie un email via Nodemailer (compatible Mailtrap, Gmail, etc.)
+ */
 export async function sendEmail(message: SmtpMessage): Promise<{
   accepted: string[];
   rejected: string[];
@@ -52,31 +63,48 @@ export async function sendEmail(message: SmtpMessage): Promise<{
   messageId: string;
   response: string;
 }> {
-  const authToken = getAuthToken();
+  try {
+    const transporter = createTransporter();
+    
+    // Préparer les destinataires
+    const to = Array.isArray(message.to) ? message.to.join(', ') : message.to;
+    const cc = message.cc 
+      ? (Array.isArray(message.cc) ? message.cc.join(', ') : message.cc)
+      : undefined;
 
-  const response = await fetch(
-    "https://connectors.replit.com/api/v2/mailer/send",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X_REPLIT_TOKEN": authToken,
-      },
-      body: JSON.stringify({
-        to: message.to,
-        cc: message.cc,
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
-        attachments: message.attachments,
-      }),
-    }
-  );
+    // Préparer les pièces jointes
+    const attachments = message.attachments?.map(att => ({
+      filename: att.filename,
+      content: att.content,
+      contentType: att.contentType,
+      encoding: att.encoding,
+    }));
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to send email");
+    // Envoyer l'email
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || 'noreply@tajdeed.com',
+      to,
+      cc,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      attachments,
+    });
+
+    console.log('✅ Email envoyé avec succès:', {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    });
+
+    return {
+      accepted: info.accepted as string[],
+      rejected: info.rejected as string[],
+      messageId: info.messageId,
+      response: info.response,
+    };
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'envoi de l\'email:', error);
+    throw new Error(`Échec de l'envoi de l'email: ${error.message}`);
   }
-
-  return await response.json();
 }

@@ -3,10 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { IAuthService, AuthResult, AuthResultExtended, SessionData, GoogleUserInfo } from './interfaces/auth.interface';
 import { createBetterAuthConfig } from './auth.config';
-import { AppUser, User, Role, UserStatus, VerificationType } from '@prisma/client';
+import { User, Role, UserStatus } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
-import * as bcrypt from 'bcryptjs';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 
 @Injectable()
@@ -22,29 +21,34 @@ export class AuthService implements IAuthService {
 
   async signInGoogle(code: string): Promise<AuthResult> {
     try {
-      // Pour l'instant, simulation de l'auth Google
-      // TODO: Implémenter l'échange du code avec Google OAuth
-      const mockGoogleUser = {
-        id: `google_${Date.now()}`,
-        email: 'test@example.com',
-        name: 'Test User',
-      };
-
-      // Créer ou récupérer l'utilisateur dans notre base
-      const user = await this.findOrCreateUser(mockGoogleUser);
-
-      // Créer une session device d'abord
-      const deviceSession = await this.createDeviceSession(user.id);
+      // Utiliser Better Auth pour l'authentification Google
+      const auth = createBetterAuthConfig(this.configService, this.prismaService);
       
-      // Générer des tokens sécurisés
-      const accessToken = this.generateAccessToken(user.id, deviceSession.id);
-      const refreshToken = this.generateRefreshHash();
-      
-      // Mettre à jour avec le vrai refresh token
-      await this.prismaService.deviceSession.update({
-        where: { id: deviceSession.id },
-        data: { refreshHash: this.hashRefreshToken(refreshToken) },
+      // Authentifier avec Google via Better Auth
+      const result = await auth.api.signInSocial({
+        body: {
+          provider: 'google',
+          callbackURL: this.configService.get('GOOGLE_CALLBACK_URL'),
+        },
       });
+
+      if (!result || !('user' in result) || !result.user) {
+        throw new UnauthorizedException('Échec de l\'authentification Google');
+      }
+
+      // Récupérer l'utilisateur complet depuis la base de données
+      const user = await this.prismaService.user.findUnique({
+        where: { id: result.user.id },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('Utilisateur non trouvé après authentification Google');
+      }
+
+      // Créer une session pour l'utilisateur
+      const session = await this.createUserSession(user.id);
+      const accessToken = this.generateAccessToken(user.id, session.id);
+      const refreshToken = session.sessionToken;
 
       return {
         accessToken,
@@ -60,42 +64,40 @@ export class AuthService implements IAuthService {
 
   async refreshToken(refreshToken: string): Promise<AuthResult> {
     try {
-      // Vérifier le refresh token haché dans notre base
-      const hashedRefreshToken = this.hashRefreshToken(refreshToken);
-      const deviceSession = await this.prismaService.deviceSession.findFirst({
-        where: { refreshHash: hashedRefreshToken },
+      // Trouver la session par token
+      const session = await this.prismaService.session.findFirst({
+        where: { sessionToken: refreshToken },
         include: { user: true },
       });
 
-      if (!deviceSession) {
+      if (!session) {
         throw new UnauthorizedException('Refresh token invalide');
       }
 
-      // Vérifier la validité (TTL)
-      const expiryDate = new Date(deviceSession.createdAt);
-      expiryDate.setDate(expiryDate.getDate() + deviceSession.ttlDays);
-      
-      if (new Date() > expiryDate) {
-        await this.prismaService.deviceSession.delete({
-          where: { id: deviceSession.id },
+      // Vérifier l'expiration
+      if (new Date() > session.expiresAt) {
+        await this.prismaService.session.delete({
+          where: { id: session.id },
         });
         throw new UnauthorizedException('Refresh token expiré');
       }
 
-      // Générer un nouveau token avec session ID
-      const newAccessToken = this.generateAccessToken(deviceSession.userId, deviceSession.id);
+      // Générer un nouveau access token
+      const newAccessToken = this.generateAccessToken(session.userId, session.id);
 
-      // Mettre à jour la session avec nouveau refresh token
-      const newRefreshToken = this.generateRefreshHash();
-      await this.prismaService.deviceSession.update({
-        where: { id: deviceSession.id },
-        data: { refreshHash: this.hashRefreshToken(newRefreshToken) },
+      // Prolonger la session
+      await this.prismaService.session.update({
+        where: { id: session.id },
+        data: { 
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date(),
+        },
       });
 
       return {
         accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-        user: deviceSession.user,
+        refreshToken: session.sessionToken,
+        user: session.user,
         expiresIn: 900,
       };
     } catch (error) {
@@ -106,8 +108,8 @@ export class AuthService implements IAuthService {
 
   async logout(sessionId: string): Promise<void> {
     try {
-      // Supprimer la session par ID (cohérent avec AuthGuard)
-      await this.prismaService.deviceSession.delete({
+      // Supprimer la session par ID
+      await this.prismaService.session.delete({
         where: { id: sessionId },
       });
     } catch (error) {
@@ -116,7 +118,7 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async getMe(sessionId: string): Promise<AppUser | null> {
+  async getMe(sessionId: string): Promise<User | null> {
     try {
       // Vérifier la session via Better Auth
       const session = await this.validateSession(sessionId);
@@ -139,7 +141,7 @@ export class AuthService implements IAuthService {
       }
 
       // Vérifier que la session existe et correspond au token
-      const deviceSession = await this.prismaService.deviceSession.findFirst({
+      const session = await this.prismaService.session.findFirst({
         where: { 
           id: tokenData.sessionId,
           userId: tokenData.userId 
@@ -147,56 +149,27 @@ export class AuthService implements IAuthService {
         include: { user: true },
       });
 
-      if (!deviceSession) {
+      if (!session) {
+        return null;
+      }
+
+      // Vérifier l'expiration
+      if (new Date() > session.expiresAt) {
         return null;
       }
 
       return {
-        sessionId: deviceSession.id,
-        userId: deviceSession.userId,
-        user: deviceSession.user,
-        expiresAt: new Date(Date.now() + 900000), // 15 minutes
+        sessionId: session.id,
+        userId: session.userId,
+        user: session.user,
+        expiresAt: session.expiresAt,
       };
     } catch (error) {
       return null;
     }
   }
 
-  private async findOrCreateUser(googleUser: GoogleUserInfo): Promise<AppUser> {
-    let user = await this.prismaService.appUser.findFirst({
-      where: { username: googleUser.email },
-    });
 
-    if (!user) {
-      user = await this.prismaService.appUser.create({
-        data: {
-          id: googleUser.id,
-          username: googleUser.email,
-          role: Role.USER,
-        },
-      });
-    }
-
-    return user;
-  }
-
-  private async createDeviceSession(userId: string): Promise<any> {
-    return await this.prismaService.deviceSession.create({
-      data: {
-        userId,
-        refreshHash: 'temp', // Sera mis à jour après génération du token
-        ttlDays: 30,
-      },
-    });
-  }
-
-  private hashRefreshToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
-  }
-
-  private generateRefreshHash(): string {
-    return crypto.randomUUID() + '.' + Date.now();
-  }
 
   private generateAccessToken(userId: string, sessionId: string): string {
     const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
@@ -296,7 +269,7 @@ export class AuthService implements IAuthService {
         },
       });
 
-      if (!result || !result.user || !result.session) {
+      if (!result || !result.user) {
         throw new UnauthorizedException('Email ou mot de passe incorrect');
       }
 
@@ -321,9 +294,15 @@ export class AuthService implements IAuthService {
         throw new UnauthorizedException('Veuillez vérifier votre email avant de vous connecter.');
       }
 
+      // Créer ou récupérer la session
+      const session = await this.prismaService.session.findFirst({
+        where: { userId: user.id },
+        orderBy: { expiresAt: 'desc' },
+      }) || await this.createUserSession(user.id);
+
       // Générer nos tokens personnalisés pour compatibilité avec l'ancien système
-      const accessToken = this.generateAccessToken(user.id, result.session.id);
-      const refreshToken = result.session.token;
+      const accessToken = this.generateAccessToken(user.id, session.id);
+      const refreshToken = result.token || session.sessionToken;
 
       return {
         accessToken,
@@ -366,20 +345,15 @@ export class AuthService implements IAuthService {
         },
       });
 
-      // Si autoSignInAfterVerification est activé, Better Auth créera automatiquement une session
-      if (result.session) {
-        const accessToken = this.generateAccessToken(result.user.id, result.session.id);
-        const refreshToken = result.session.token;
-
-        return {
-          autoSignIn: true,
-          accessToken,
-          refreshToken,
-        };
-      }
+      // Créer une session pour l'utilisateur après vérification
+      const session = await this.createUserSession(result.user.id);
+      const accessToken = this.generateAccessToken(result.user.id, session.id);
+      const refreshToken = session.sessionToken;
 
       return {
-        autoSignIn: false,
+        autoSignIn: true,
+        accessToken,
+        refreshToken,
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -412,7 +386,6 @@ export class AuthService implements IAuthService {
       await this.prismaService.verificationToken.deleteMany({
         where: {
           identifier: email,
-          type: VerificationType.EMAIL_VERIFICATION,
         },
       });
 
@@ -424,8 +397,7 @@ export class AuthService implements IAuthService {
         data: {
           identifier: email,
           token: verificationToken,
-          expires: expiresAt,
-          type: VerificationType.EMAIL_VERIFICATION,
+          expiresAt: expiresAt,
         },
       });
 
@@ -451,7 +423,7 @@ export class AuthService implements IAuthService {
       await auth.api.forgetPassword({
         body: {
           email,
-          callbackURL: `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/reset-password`,
+          redirectTo: `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/reset-password`,
         },
       });
 
@@ -474,11 +446,11 @@ export class AuthService implements IAuthService {
       const result = await auth.api.resetPassword({
         body: {
           token,
-          password: newPassword,
+          newPassword: newPassword,
         },
       });
 
-      if (!result || !result.user) {
+      if (!result || !result.status) {
         throw new BadRequestException('Token de réinitialisation invalide ou expiré');
       }
 
@@ -510,8 +482,8 @@ export class AuthService implements IAuthService {
     return await this.prismaService.session.create({
       data: {
         userId,
-        sessionToken: 'temp',
-        expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 jours
+        sessionToken: crypto.randomBytes(32).toString('hex'),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 jours
       },
     });
   }

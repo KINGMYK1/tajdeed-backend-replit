@@ -1,4 +1,4 @@
-import { AppUser, User } from '@prisma/client';
+import { User } from '@prisma/client';
 import { RegisterDto, LoginDto } from '../dto/auth.dto';
 
 export interface IAuthService {
@@ -6,7 +6,7 @@ export interface IAuthService {
   signInGoogle(code: string): Promise<AuthResult>;
   refreshToken(refreshToken: string): Promise<AuthResult>;
   logout(sessionId: string): Promise<void>;
-  getMe(sessionId: string): Promise<AppUser | null>;
+  getMe(sessionId: string): Promise<User | null>;
   validateSession(accessToken: string): Promise<SessionData | null>;
 
   // Nouvelles méthodes pour email/password
@@ -21,14 +21,18 @@ export interface IAuthService {
 export interface AuthResult {
   accessToken: string;
   refreshToken: string;
-  user: AppUser;
+  user: User;
   expiresIn: number;
+}
+
+export interface AuthResultExtended extends AuthResult {
+  // Extension pour compatibilité future
 }
 
 export interface SessionData {
   sessionId: string;
   userId: string;
-  user: AppUser;
+  user: User;
   expiresAt: Date;
 }
 
@@ -37,8 +41,4 @@ export interface GoogleUserInfo {
   email: string;
   name: string;
   picture?: string;
-}
-
-export interface AuthResultExtended extends AuthResult {
-  user: User;
 }

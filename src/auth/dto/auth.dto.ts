@@ -36,7 +36,6 @@ export class UserProfileDto {
 }
 
 // === Nouveaux DTOs pour authentification email/password ===
-
 export class RegisterDto {
   @IsString()
   @IsNotEmpty()

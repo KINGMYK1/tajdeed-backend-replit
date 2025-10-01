@@ -1,0 +1,336 @@
+{
+  "name": "Tajdeed Backend API Tests",
+  "description": "Collection complète pour tester l'API Tajdeed - Auth & Modération",
+  "version": "1.0.0",
+  "baseUrl": "http://localhost:3000",
+  "variables": {
+    "baseUrl": "http://localhost:3000",
+    "accessToken": "",
+    "refreshToken": "",
+    "userId": "",
+    "moderatorToken": "",
+    "testEmail": "test@example.com",
+    "testPassword": "Password123!"
+  },
+  "requests": [
+    {
+      "name": "Authentication - Email/Password",
+      "folder": true,
+      "requests": [
+        {
+          "name": "1. Register with Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/register/email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "{{testEmail}}",
+            "password": "{{testPassword}}",
+            "username": "testuser",
+            "name": "Test User"
+          },
+          "tests": [
+            "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+            "pm.test('Response has user', () => pm.expect(pm.response.json()).to.have.property('user'));",
+            "const userId = pm.response.json().user.id;",
+            "pm.collectionVariables.set('userId', userId);"
+          ]
+        },
+        {
+          "name": "2. Verify Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/verify-email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "token": "REMPLACER_PAR_TOKEN_DES_LOGS"
+          },
+          "description": "⚠️ Récupérez le token de vérification dans les logs du serveur et remplacez-le dans le body",
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Email verified', () => pm.expect(pm.response.json().success).to.be.true);",
+            "if (pm.response.json().accessToken) {",
+            "  pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+            "  pm.collectionVariables.set('refreshToken', pm.response.json().refreshToken);",
+            "}"
+          ]
+        },
+        {
+          "name": "3. Login with Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/login/email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "{{testEmail}}",
+            "password": "{{testPassword}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has accessToken', () => pm.expect(pm.response.json()).to.have.property('accessToken'));",
+            "pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+            "pm.collectionVariables.set('refreshToken', pm.response.json().refreshToken);"
+          ]
+        },
+        {
+          "name": "4. Get Profile",
+          "method": "GET",
+          "url": "{{baseUrl}}/auth/profile",
+          "headers": {
+            "Authorization": "Bearer {{accessToken}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Email verified is true', () => pm.expect(pm.response.json().emailVerified).to.be.true);"
+          ]
+        },
+        {
+          "name": "5. Refresh Token",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/refresh",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "refreshToken": "{{refreshToken}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('accessToken', pm.response.json().accessToken);",
+            "pm.collectionVariables.set('refreshToken', pm.response.json().refreshToken);"
+          ]
+        },
+        {
+          "name": "6. Resend Verification Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/resend-verification",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "{{testEmail}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+          ]
+        },
+        {
+          "name": "7. Forgot Password",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/forgot-password",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "{{testEmail}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+          ]
+        },
+        {
+          "name": "8. Reset Password",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/reset-password",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "token": "REMPLACER_PAR_TOKEN_EMAIL",
+            "newPassword": "NewPassword123!"
+          },
+          "description": "⚠️ Récupérez le token du reset password dans les logs ou l'email"
+        },
+        {
+          "name": "9. Logout",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/logout",
+          "headers": {
+            "Authorization": "Bearer {{accessToken}}"
+          },
+          "tests": [
+            "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('accessToken', '');",
+            "pm.collectionVariables.set('refreshToken', '');"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Moderation System",
+      "folder": true,
+      "description": "⚠️ Pour tester ces endpoints, vous devez avoir un compte ADMIN. Utilisez Prisma Studio pour définir le role = 'ADMIN' sur un utilisateur.",
+      "requests": [
+        {
+          "name": "1. Apply Moderation Action - WARNING",
+          "method": "POST",
+          "url": "{{baseUrl}}/moderation/actions",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "userId": "{{userId}}",
+            "action": "WARNING",
+            "reason": "Contenu inapproprié publié",
+            "evidence": "https://example.com/screenshot.png"
+          },
+          "tests": [
+            "pm.test('Status code is 201', () => pm.response.to.have.status(201));"
+          ]
+        },
+        {
+          "name": "2. Apply Moderation Action - TEMPORARY_SUSPENSION",
+          "method": "POST",
+          "url": "{{baseUrl}}/moderation/actions",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "userId": "{{userId}}",
+            "action": "TEMPORARY_SUSPENSION",
+            "reason": "Spam répété",
+            "duration": 72
+          }
+        },
+        {
+          "name": "3. Send Warning to User",
+          "method": "POST",
+          "url": "{{baseUrl}}/moderation/warnings",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "userId": "{{userId}}",
+            "reason": "Langage inapproprié dans les commentaires",
+            "severity": "MEDIUM"
+          }
+        },
+        {
+          "name": "4. Get User Moderation History",
+          "method": "GET",
+          "url": "{{baseUrl}}/moderation/history/{{userId}}",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}"
+          }
+        },
+        {
+          "name": "5. List Moderated Users",
+          "method": "GET",
+          "url": "{{baseUrl}}/moderation/moderated-users?limit=20",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}"
+          }
+        },
+        {
+          "name": "6. Get Moderation Stats",
+          "method": "GET",
+          "url": "{{baseUrl}}/moderation/stats",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}"
+          }
+        },
+        {
+          "name": "7. Get User Warnings (Self)",
+          "method": "GET",
+          "url": "{{baseUrl}}/moderation/warnings/me",
+          "headers": {
+            "Authorization": "Bearer {{accessToken}}"
+          }
+        },
+        {
+          "name": "8. Mark Warnings as Read",
+          "method": "PATCH",
+          "url": "{{baseUrl}}/moderation/warnings/me/read",
+          "headers": {
+            "Authorization": "Bearer {{accessToken}}"
+          }
+        },
+        {
+          "name": "9. Revoke Moderation Action",
+          "method": "POST",
+          "url": "{{baseUrl}}/moderation/revoke/ACTION_ID_ICI",
+          "headers": {
+            "Authorization": "Bearer {{moderatorToken}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "reason": "Erreur dans l'évaluation initiale"
+          },
+          "description": "⚠️ Remplacez ACTION_ID_ICI par l'ID d'une action de modération existante"
+        }
+      ]
+    },
+    {
+      "name": "Security Tests",
+      "folder": true,
+      "description": "Tests de sécurité - Ces requêtes doivent échouer avec les codes d'erreur appropriés",
+      "requests": [
+        {
+          "name": "Unauthorized - Get Profile without Token",
+          "method": "GET",
+          "url": "{{baseUrl}}/auth/profile",
+          "tests": [
+            "pm.test('Status code is 401', () => pm.response.to.have.status(401));"
+          ]
+        },
+        {
+          "name": "Forbidden - Moderation Action as USER",
+          "method": "POST",
+          "url": "{{baseUrl}}/moderation/actions",
+          "headers": {
+            "Authorization": "Bearer {{accessToken}}",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "userId": "some-user-id",
+            "action": "WARNING",
+            "reason": "Test"
+          },
+          "tests": [
+            "pm.test('Status code is 403', () => pm.response.to.have.status(403));"
+          ]
+        },
+        {
+          "name": "Bad Request - Login with Invalid Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/login/email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "invalid-email",
+            "password": "password"
+          },
+          "tests": [
+            "pm.test('Status code is 400 or 401', () => {",
+            "  pm.expect(pm.response.code).to.be.oneOf([400, 401]);",
+            "});"
+          ]
+        },
+        {
+          "name": "Conflict - Register with Existing Email",
+          "method": "POST",
+          "url": "{{baseUrl}}/auth/register/email",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "email": "{{testEmail}}",
+            "password": "{{testPassword}}",
+            "username": "duplicate",
+            "name": "Duplicate User"
+          },
+          "tests": [
+            "pm.test('Status code is 409', () => pm.response.to.have.status(409));"
+          ]
+        }
+      ]
+    }
+  ]
+}
