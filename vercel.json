@@ -2,28 +2,27 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/main.ts",
+      "src": "package.json",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "src/main.js",
+      "dest": "dist/main.js",
       "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     }
   ],
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build && npx prisma generate",
   "env": {
     "NODE_ENV": "production"
   },
-  "build": {
-    "env": {
-      "PRISMA_GENERATE_SKIP_AUTOINSTALL": "true"
-    }
-  },
   "functions": {
-    "src/main.ts": {
-      "maxDuration": 30
+    "dist/main.js": {
+      "maxDuration": 30,
+      "memory": 1024
     }
   }
 }
