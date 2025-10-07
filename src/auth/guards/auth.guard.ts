@@ -72,10 +72,12 @@ export class AdminGuard implements CanActivate {
       return false;
     }
 
-    // Vérifier le rôle admin
+    // Vérifier le rôle admin, moderator ou super admin
     const user = (request as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      throw new UnauthorizedException('Accès réservé aux administrateurs');
+    const allowedRoles = ['MODERATOR', 'ADMIN', 'SUPER_ADMIN'];
+    
+    if (!user || !allowedRoles.includes(user.role)) {
+      throw new UnauthorizedException('Accès réservé aux modérateurs, administrateurs et super-administrateurs');
     }
 
     return true;

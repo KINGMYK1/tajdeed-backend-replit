@@ -42,10 +42,13 @@ async function bootstrap() {
     transform: true,
   }));
 
-  // Enable CORS for development
+  // Configuration CORS - Accepte toutes les origines pour les tests
   app.enableCors({
-    origin: process.env.NODE_ENV === 'development' ? true : false,
+    origin: true, // Accepte toutes les origines (pratique pour dev et tests)
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
+    maxAge: 86400, // Cache preflight requests for 24h
   });
 
   await app.listen(port, '0.0.0.0');

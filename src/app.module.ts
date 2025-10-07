@@ -17,7 +17,15 @@ export class AppModule implements NestModule {
     // Middlewares généraux
     consumer.apply(HelmetMiddleware, RateLimitMiddleware).forRoutes('*');
     
-    // Rate limiting spécifique pour l'authentification
-    consumer.apply(AuthRateLimitMiddleware).forRoutes('auth/google', 'auth/refresh');
+    // Rate limiting spécifique pour l'authentification (5 tentatives / 15 min)
+    consumer.apply(AuthRateLimitMiddleware).forRoutes(
+      'auth/google',
+      'auth/refresh',
+      'auth/login',
+      'auth/register',
+      'auth/forgot-password',
+      'auth/reset-password',
+      'auth/verify-email',
+    );
   }
 }
