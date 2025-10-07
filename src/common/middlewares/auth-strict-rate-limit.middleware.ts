@@ -17,7 +17,7 @@ export class AuthStrictRateLimitMiddleware implements NestMiddleware {
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 3, // 3 requêtes maximum
     message: {
-      error: 'Trop de tentatives. Veuillez réessayer dans 15 minutes.',
+      error: 'Trop de tentatives. Veuillez réessayer dans 15 minutes juste un test .',
       code: 'AUTH_STRICT_RATE_LIMIT_EXCEEDED',
       retryAfter: 15 * 60, // En secondes
     },
