@@ -1,51 +1,252 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { IAuthService, AuthResult, AuthResultExtended, SessionData, GoogleUserInfo } from './interfaces/auth.interface';
-import { createBetterAuthConfig } from './auth.config';
-import { User, Role, UserStatus } from '@prisma/client';
+import { VerificationCodeService } from './verification-code.service';
+import {
+  RegisterDto,
+  LoginDto,
+  RefreshTokenDto,
+  VerifyEmailDto,
+  ResendVerificationDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
+import { UserStatus, Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
 
 @Injectable()
-export class AuthService implements IAuthService {
-  private betterAuth;
-
+export class AuthService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly configService: ConfigService,
-  ) {
-    this.betterAuth = createBetterAuthConfig(configService, prismaService);
-  }
+    private readonly verificationCodeService: VerificationCodeService,
+  ) {}
 
-  async signInGoogle(code: string): Promise<AuthResult> {
+  /**
+   * ============================================
+   * 🔐 INSCRIPTION AVEC CODE À 6 CHIFFRES
+   * ============================================
+   */
+  async register(registerDto: RegisterDto) {
     try {
-      // Utiliser Better Auth pour l'authentification Google
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Authentifier avec Google via Better Auth
-      const result = await auth.api.signInSocial({
-        body: {
-          provider: 'google',
-          callbackURL: this.configService.get('GOOGLE_CALLBACK_URL'),
+      const { email, password, name } = registerDto;
+
+      // Vérifier si l'utilisateur existe déjà
+      const existingUser = await this.prismaService.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Un utilisateur avec cet email existe déjà');
+      }
+
+      // Hash du mot de passe
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Créer l'utilisateur
+      const user = await this.prismaService.user.create({
+        data: {
+          email,
+          name,
+          emailVerified: false,
+          status: UserStatus.PENDING_VERIFICATION,
+          role: Role.USER,
+          accounts: {
+            create: {
+              accountId: email,
+              providerId: 'credential',
+              password: hashedPassword,
+            },
+          },
         },
       });
 
-      if (!result || !('user' in result) || !result.user) {
-        throw new UnauthorizedException('Échec de l\'authentification Google');
+      // Générer et envoyer le code de vérification à 6 chiffres
+      await this.verificationCodeService.generateAndSendCode(
+        user.id,
+        email,
+        'EMAIL_VERIFICATION',
+      );
+
+      return {
+        message: 'Inscription réussie. Un code de vérification à 6 chiffres a été envoyé à votre email.',
+        userId: user.id,
+      };
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de l\'inscription:', error);
+      throw new BadRequestException('Erreur lors de l\'inscription');
+    }
+  }
+
+  /**
+   * ============================================
+   * ✅ VÉRIFICATION EMAIL AVEC CODE À 6 CHIFFRES
+   * ============================================
+   */
+  async verifyEmail(verifyEmailDto: VerifyEmailDto) {
+    try {
+      const { email, code } = verifyEmailDto;
+
+      // Vérifier le code à 6 chiffres
+      const isValid = await this.verificationCodeService.verifyCode(
+        email,
+        code,
+        'EMAIL',
+      );
+
+      if (!isValid) {
+        throw new BadRequestException('Code invalide ou expiré');
       }
 
-      // Récupérer l'utilisateur complet depuis la base de données
+      // Trouver l'utilisateur
       const user = await this.prismaService.user.findUnique({
-        where: { id: result.user.id },
+        where: { email },
       });
 
       if (!user) {
-        throw new UnauthorizedException('Utilisateur non trouvé après authentification Google');
+        throw new NotFoundException('Utilisateur non trouvé');
       }
 
-      // Créer une session pour l'utilisateur
+      // Mettre à jour le statut de l'utilisateur
+      await this.prismaService.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerified: true,
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      // Supprimer le code utilisé
+      await this.verificationCodeService.deleteUsedCodes(email, 'EMAIL_VERIFICATION');
+
+      // Créer une session pour l'utilisateur (auto-login)
+      const session = await this.createUserSession(user.id);
+      const accessToken = this.generateAccessToken(user.id, session.id);
+      const refreshToken = session.sessionToken;
+
+      return {
+        message: 'Email vérifié avec succès',
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la vérification:', error);
+      throw new BadRequestException(
+        error.message || 'Erreur lors de la vérification de l\'email',
+      );
+    }
+  }
+
+  /**
+   * ============================================
+   * 🔄 RENVOYER UN CODE DE VÉRIFICATION
+   * ============================================
+   */
+  async resendVerificationEmail(resendDto: ResendVerificationDto) {
+    try {
+      const { email } = resendDto;
+
+      // Vérifier si l'utilisateur existe
+      const user = await this.prismaService.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        // Ne pas révéler que l'utilisateur n'existe pas (sécurité)
+        return {
+          message: 'Si un compte existe avec cet email, un nouveau code a été envoyé.',
+        };
+      }
+
+      if (user.emailVerified) {
+        throw new BadRequestException('Cet email est déjà vérifié');
+      }
+
+      // Générer et envoyer un nouveau code à 6 chiffres
+      await this.verificationCodeService.generateAndSendCode(
+        user.id,
+        email,
+        'EMAIL_VERIFICATION',
+      );
+
+      return {
+        message: 'Un nouveau code de vérification à 6 chiffres a été envoyé à votre email.',
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors du renvoi:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Erreur lors du renvoi du code');
+    }
+  }
+
+  /**
+   * ============================================
+   * 🔑 CONNEXION AVEC EMAIL/PASSWORD
+   * ============================================
+   */
+  async login(loginDto: LoginDto) {
+    try {
+      const { email, password } = loginDto;
+
+      // Trouver l'utilisateur
+      const user = await this.prismaService.user.findUnique({
+        where: { email },
+        include: {
+          accounts: {
+            where: { providerId: 'credential' },
+          },
+        },
+      });
+
+      if (!user || !user.accounts[0]) {
+        throw new UnauthorizedException('Email ou mot de passe incorrect');
+      }
+
+      // Vérifier si l'email est vérifié
+      if (!user.emailVerified) {
+        throw new UnauthorizedException(
+          'Veuillez vérifier votre email avant de vous connecter',
+        );
+      }
+
+      // Vérifier le statut du compte
+      if (user.status !== UserStatus.ACTIVE) {
+        throw new UnauthorizedException('Votre compte a été suspendu ou banni');
+      }
+
+      // Vérifier le mot de passe
+      const account = user.accounts[0];
+      
+      if (!account.password) {
+        throw new UnauthorizedException('Email ou mot de passe incorrect');
+      }
+      
+      const isPasswordValid = await bcrypt.compare(password, account.password);
+
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Email ou mot de passe incorrect');
+      }
+
+      // Créer une session
       const session = await this.createUserSession(user.id);
       const accessToken = this.generateAccessToken(user.id, session.id);
       const refreshToken = session.sessionToken;
@@ -53,504 +254,751 @@ export class AuthService implements IAuthService {
       return {
         accessToken,
         refreshToken,
-        user,
-        expiresIn: 900, // 15 minutes
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException('Erreur lors de l\'authentification Google: ' + errorMessage);
-    }
-  }
-
-  async refreshToken(refreshToken: string): Promise<AuthResult> {
-    try {
-      // Trouver la session par token
-      const session = await this.prismaService.session.findFirst({
-        where: { sessionToken: refreshToken },
-        include: { user: true },
-      });
-
-      if (!session) {
-        throw new UnauthorizedException('Refresh token invalide');
-      }
-
-      // Vérifier l'expiration
-      if (new Date() > session.expiresAt) {
-        await this.prismaService.session.delete({
-          where: { id: session.id },
-        });
-        throw new UnauthorizedException('Refresh token expiré');
-      }
-
-      // Générer un nouveau access token
-      const newAccessToken = this.generateAccessToken(session.userId, session.id);
-
-      // Prolonger la session
-      await this.prismaService.session.update({
-        where: { id: session.id },
-        data: { 
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          updatedAt: new Date(),
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          emailVerified: user.emailVerified,
         },
-      });
-
-      return {
-        accessToken: newAccessToken,
-        refreshToken: session.sessionToken,
-        user: session.user,
-        expiresIn: 900,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new UnauthorizedException('Impossible de rafraîchir le token: ' + errorMessage);
-    }
-  }
-
-  async logout(sessionId: string): Promise<void> {
-    try {
-      // Supprimer la session par ID
-      await this.prismaService.session.delete({
-        where: { id: sessionId },
-      });
-    } catch (error) {
-      // Silently fail logout errors
-      console.error('Erreur lors de la déconnexion:', error);
-    }
-  }
-
-  async getMe(sessionId: string): Promise<User | null> {
-    try {
-      // Vérifier la session via Better Auth
-      const session = await this.validateSession(sessionId);
-      if (!session) {
-        return null;
-      }
-
-      return session.user;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  async validateSession(accessToken: string): Promise<SessionData | null> {
-    try {
-      // Vérifier JWT et extraire payload
-      const tokenData = this.verifyAccessToken(accessToken);
-      if (!tokenData) {
-        return null;
-      }
-
-      // Vérifier que la session existe et correspond au token
-      const session = await this.prismaService.session.findFirst({
-        where: { 
-          id: tokenData.sessionId,
-          userId: tokenData.userId 
-        },
-        include: { user: true },
-      });
-
-      if (!session) {
-        return null;
-      }
-
-      // Vérifier l'expiration
-      if (new Date() > session.expiresAt) {
-        return null;
-      }
-
-      return {
-        sessionId: session.id,
-        userId: session.userId,
-        user: session.user,
-        expiresAt: session.expiresAt,
-      };
-    } catch (error) {
-      return null;
-    }
-  }
-
-
-  private generateAccessToken(userId: string, sessionId: string): string {
-    const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
-    const payload = {
-      sub: userId,
-      jti: sessionId,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
-    };
-    return jwt.sign(payload, secret);
-  }
-
-  private extractUserIdFromToken(token: string): string | null {
-    try {
-      const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
-      const decoded = jwt.verify(token, secret) as any;
-      return decoded.sub || null;
-    } catch {
-      return null;
-    }
-  }
-
-  private verifyAccessToken(token: string): { userId: string; sessionId: string } | null {
-    try {
-      const secret = this.configService.get<string>('BETTER_AUTH_SECRET') || 'dev-secret';
-      const decoded = jwt.verify(token, secret) as any;
-      return {
-        userId: decoded.sub,
-        sessionId: decoded.jti,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  // === Nouvelles méthodes pour authentification email/password ===
-
-  /**
-   * Inscription d'un nouvel utilisateur avec email et mot de passe
-   * Utilise Better Auth pour la gestion des utilisateurs et l'envoi d'emails
-   */
-  async registerWithEmail(registerDto: RegisterDto): Promise<{ userId: string }> {
-    try {
-      // Utiliser Better Auth pour l'inscription
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Appeler l'API Better Auth pour créer l'utilisateur avec mot de passe
-      const result = await auth.api.signUpEmail({
-        body: {
-          email: registerDto.email,
-          password: registerDto.password,
-          name: registerDto.name,
-          callbackURL: `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/verify-email`,
-        },
-      });
-
-      if (!result || !result.user) {
-        throw new BadRequestException('Erreur lors de la création du compte');
-      }
-
-      // Mettre à jour les champs supplémentaires si nécessaire
-      if (registerDto.username) {
-        await this.prismaService.user.update({
-          where: { id: result.user.id },
-          data: { 
-            username: registerDto.username,
-            role: Role.USER,
-            status: UserStatus.PENDING_VERIFICATION,
-          },
-        });
-      }
-
-      return { userId: result.user.id };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException('Erreur lors de l\'inscription: ' + errorMessage);
-    }
-  }
-
-  /**
-   * Connexion avec email et mot de passe
-   * Vérifie que l'email est confirmé avant d'autoriser la connexion
-   */
-  async loginWithEmail(loginDto: LoginDto): Promise<AuthResultExtended> {
-    try {
-      // Utiliser Better Auth pour la connexion
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Appeler l'API Better Auth pour la connexion
-      const result = await auth.api.signInEmail({
-        body: {
-          email: loginDto.email,
-          password: loginDto.password,
-        },
-      });
-
-      if (!result || !result.user) {
-        throw new UnauthorizedException('Email ou mot de passe incorrect');
-      }
-
-      // Vérifier le statut du compte dans notre système
-      const user = await this.prismaService.user.findUnique({
-        where: { id: result.user.id },
-      });
-
-      if (!user) {
-        throw new UnauthorizedException('Utilisateur non trouvé');
-      }
-
-      if (user.status === UserStatus.BANNED) {
-        throw new UnauthorizedException('Votre compte a été banni. Contactez le support.');
-      }
-
-      if (user.status === UserStatus.SUSPENDED) {
-        throw new UnauthorizedException('Votre compte est temporairement suspendu.');
-      }
-
-      if (!user.emailVerified) {
-        throw new UnauthorizedException('Veuillez vérifier votre email avant de vous connecter.');
-      }
-
-      // Créer ou récupérer la session
-      const session = await this.prismaService.session.findFirst({
-        where: { userId: user.id },
-        orderBy: { expiresAt: 'desc' },
-      }) || await this.createUserSession(user.id);
-
-      // Générer nos tokens personnalisés pour compatibilité avec l'ancien système
-      const accessToken = this.generateAccessToken(user.id, session.id);
-      const refreshToken = result.token || session.sessionToken;
-
-      return {
-        accessToken,
-        refreshToken,
-        user,
-        expiresIn: 900, // 15 minutes
-      };
-    } catch (error) {
+      console.error('❌ Erreur lors de la connexion:', error);
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new UnauthorizedException('Erreur lors de la connexion: ' + errorMessage);
+      throw new UnauthorizedException('Erreur lors de la connexion');
     }
   }
 
   /**
-   * Vérifier un email avec le token de vérification
+   * ============================================
+   * 📧 DEMANDE RÉINITIALISATION MOT DE PASSE (CODE 6 CHIFFRES)
+   * ============================================
    */
-  async verifyEmail(token: string): Promise<{ autoSignIn: boolean; accessToken?: string; refreshToken?: string }> {
+  async sendPasswordResetEmail(forgotPasswordDto: ForgotPasswordDto) {
     try {
-      // Utiliser Better Auth pour la vérification d'email
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Appeler l'API Better Auth pour vérifier l'email
-      const result = await auth.api.verifyEmail({
-        query: { token },
-      });
+      const { email } = forgotPasswordDto;
 
-      if (!result || !result.user) {
-        throw new BadRequestException('Token de vérification invalide ou expiré');
-      }
-
-      // Mettre à jour le statut de l'utilisateur dans notre système
-      await this.prismaService.user.update({
-        where: { id: result.user.id },
-        data: {
-          status: UserStatus.ACTIVE,
-          emailVerified: true,
-        },
-      });
-
-      // Créer une session pour l'utilisateur après vérification
-      const session = await this.createUserSession(result.user.id);
-      const accessToken = this.generateAccessToken(result.user.id, session.id);
-      const refreshToken = session.sessionToken;
-
-      return {
-        autoSignIn: true,
-        accessToken,
-        refreshToken,
-      };
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException('Erreur lors de la vérification: ' + errorMessage);
-    }
-  }
-
-  /**
-   * Renvoyer un email de vérification
-   */
-  async resendVerificationEmail(email: string): Promise<void> {
-    try {
+      // Trouver l'utilisateur
       const user = await this.prismaService.user.findUnique({
         where: { email },
       });
 
+      // Ne pas révéler si l'utilisateur existe ou non (sécurité)
       if (!user) {
-        // Ne pas révéler si l'email existe ou non pour la sécurité
-        return;
+        return {
+          message: 'Si un compte existe avec cet email, un code de réinitialisation a été envoyé.',
+        };
       }
 
-      if (user.emailVerified) {
-        throw new BadRequestException('Email déjà vérifié');
+      // Générer et envoyer le code de réinitialisation à 6 chiffres
+      await this.verificationCodeService.generateAndSendCode(
+        user.id,
+        email,
+        'PASSWORD_RESET',
+      );
+
+      return {
+        message: 'Un code de réinitialisation à 6 chiffres a été envoyé à votre email.',
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'envoi du code de reset:', error);
+      // Silently fail pour ne pas révéler d'informations
+      return {
+        message: 'Si un compte existe avec cet email, un code de réinitialisation a été envoyé.',
+      };
+    }
+  }
+
+  /**
+   * ============================================
+   * 🔐 RÉINITIALISATION MOT DE PASSE AVEC CODE 6 CHIFFRES
+   * ============================================
+   */
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    try {
+      const { email, code, newPassword } = resetPasswordDto;
+
+      // Vérifier le code à 6 chiffres
+      const isValid = await this.verificationCodeService.verifyCode(
+        email,
+        code,
+        'PASSWORD_RESET',
+      );
+
+      if (!isValid) {
+        throw new BadRequestException('Code invalide ou expiré');
       }
 
-      // Supprimer les anciens tokens
-      await this.prismaService.verificationToken.deleteMany({
+      // Trouver l'utilisateur
+      const user = await this.prismaService.user.findUnique({
+        where: { email },
+        include: {
+          accounts: {
+            where: { providerId: 'credential' },
+          },
+        },
+      });
+
+      if (!user || !user.accounts[0]) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // Hash du nouveau mot de passe
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Mettre à jour le mot de passe
+      await this.prismaService.account.update({
+        where: { id: user.accounts[0].id },
+        data: { password: hashedPassword },
+      });
+
+      // Supprimer le code utilisé
+      await this.verificationCodeService.deleteUsedCodes(email, 'PASSWORD_RESET');
+
+      return {
+        message: 'Mot de passe réinitialisé avec succès',
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors de la réinitialisation:', error);
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException('Erreur lors de la réinitialisation du mot de passe');
+    }
+  }
+
+  /**
+   * ============================================
+   * 🔄 RAFRAÎCHIR LE TOKEN D'ACCÈS
+   * ============================================
+   */
+  async refreshToken(refreshTokenDto: RefreshTokenDto) {
+    try {
+      const { refreshToken } = refreshTokenDto;
+
+      // Valider le refresh token
+      const session = await this.prismaService.session.findFirst({
         where: {
-          identifier: email,
+          sessionToken: refreshToken,
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        include: {
+          user: true,
         },
       });
 
-      // Créer un nouveau token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 3600000); // 1 heure
-
-      await this.prismaService.verificationToken.create({
-        data: {
-          identifier: email,
-          token: verificationToken,
-          expiresAt: expiresAt,
-        },
-      });
-
-      // Envoyer l'email
-      await this.sendVerificationEmail(email, verificationToken);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
+      if (!session) {
+        throw new UnauthorizedException('Refresh token invalide ou expiré');
       }
-      // Silently fail pour ne pas révéler d'informations
+
+      // Générer un nouveau access token
+      const accessToken = this.generateAccessToken(session.userId, session.id);
+
+      // Mettre à jour la dernière utilisation de la session
+      await this.prismaService.session.update({
+        where: { id: session.id },
+        data: { updatedAt: new Date() },
+      });
+
+      return {
+        accessToken,
+        refreshToken,
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          role: session.user.role,
+        },
+      };
+    } catch (error) {
+      console.error('❌ Erreur lors du refresh:', error);
+      throw new UnauthorizedException('Token de rafraîchissement invalide');
     }
   }
 
   /**
-   * Envoyer un email de réinitialisation de mot de passe
+   * ============================================
+   * 🚪 DÉCONNEXION
+   * ============================================
    */
-  async sendPasswordResetEmail(email: string): Promise<void> {
+  async logout(sessionId: string) {
     try {
-      // Utiliser Better Auth pour envoyer l'email de reset
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Appeler l'API Better Auth pour demander un reset de mot de passe
-      await auth.api.forgetPassword({
-        body: {
-          email,
-          redirectTo: `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/reset-password`,
-        },
+      await this.prismaService.session.delete({
+        where: { id: sessionId },
       });
-
-      // Better Auth gère automatiquement l'envoi de l'email via notre configuration
     } catch (error) {
-      // Silently fail pour ne pas révéler d'informations
-      console.error('Erreur lors de l\'envoi de l\'email de reset:', error);
+      console.error('❌ Erreur lors de la déconnexion:', error);
+      // Ne pas lever d'erreur si la session n'existe pas
     }
   }
 
   /**
-   * Réinitialiser le mot de passe avec un token
+   * ============================================
+   * ✅ VALIDER UNE SESSION
+   * ============================================
    */
-  async resetPassword(token: string, newPassword: string): Promise<void> {
+  async validateSession(accessToken: string) {
     try {
-      // Utiliser Better Auth pour réinitialiser le mot de passe
-      const auth = createBetterAuthConfig(this.configService, this.prismaService);
-      
-      // Appeler l'API Better Auth pour réinitialiser le mot de passe
-      const result = await auth.api.resetPassword({
-        body: {
-          token,
-          newPassword: newPassword,
+      const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-key';
+      const payload = jwt.verify(accessToken, secret) as any;
+
+      const session = await this.prismaService.session.findFirst({
+        where: {
+          id: payload.sessionId,
+          userId: payload.sub,
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        include: {
+          user: true,
         },
       });
 
-      if (!result || !result.status) {
-        throw new BadRequestException('Token de réinitialisation invalide ou expiré');
+      if (!session) {
+        return null;
       }
 
-      // Better Auth gère automatiquement l'invalidation des sessions existantes
+      return {
+        userId: session.userId,
+        user: session.user,
+        sessionId: session.id,
+      };
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new BadRequestException('Erreur lors de la réinitialisation: ' + errorMessage);
+      return null;
     }
   }
 
-  // === Méthodes utilitaires privées ===
+  /**
+   * ============================================
+   * 👤 RÉCUPÉRER LE PROFIL UTILISATEUR
+   * ============================================
+   */
+  async getMe(sessionId: string) {
+    const session = await this.prismaService.session.findFirst({
+      where: {
+        id: sessionId,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!session) {
+      throw new UnauthorizedException('Session invalide');
+    }
+
+    return session.user;
+  }
 
   /**
-   * Vérifier un mot de passe (temporaire, à remplacer par Better Auth)
+   * ============================================
+   * 🔐 MÉTHODES PRIVÉES - GESTION DES SESSIONS
+   * ============================================
    */
-  private async verifyPassword(password: string, userId: string): Promise<boolean> {
-    // TODO: Intégrer avec Better Auth pour la vérification du mot de passe
-    // Pour l'instant, simulation
-    return true;
-  }
 
   /**
    * Créer une session utilisateur
    */
-  private async createUserSession(userId: string): Promise<any> {
+  private async createUserSession(userId: string) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 jours
+
+    const sessionToken = this.generateRandomToken();
+
     return await this.prismaService.session.create({
       data: {
         userId,
-        sessionToken: crypto.randomBytes(32).toString('hex'),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 jours
+        sessionToken,
+        expiresAt,
+        ipAddress: '',
+        userAgent: '',
       },
     });
   }
 
   /**
-   * Envoyer un email de vérification
+   * Générer un access token JWT
    */
-  private async sendVerificationEmail(email: string, token: string): Promise<void> {
+  private generateAccessToken(userId: string, sessionId: string): string {
+    const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-key';
+    return jwt.sign(
+      { sub: userId, sessionId },
+      secret,
+      { expiresIn: '15m' }, // 15 minutes
+    );
+  }
+
+  /**
+   * Générer un token aléatoire pour le refresh token
+   */
+  private generateRandomToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  // ========================================
+  // 🌐 GOOGLE OAUTH
+  // ========================================
+
+  /**
+   * Générer l'URL d'authentification Google OAuth
+   */
+  getGoogleAuthUrl(): string {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
+    const scope = 'email profile';
+    
+    if (!clientId) {
+      throw new BadRequestException('GOOGLE_CLIENT_ID non configuré');
+    }
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
+  }
+
+  /**
+   * Connexion via Google OAuth
+   */
+  async signInGoogle(code: string) {
     try {
-      const { sendEmail } = await import('../utils/replitmail');
-      const verificationUrl = `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/verify-email?token=${token}`;
-      
-      await sendEmail({
-        to: email,
-        subject: 'Vérifiez votre adresse email - Tajdeed',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #333;">Bienvenue sur Tajdeed !</h1>
-            <p>Bonjour,</p>
-            <p>Merci de vous être inscrit(e) sur Tajdeed, votre nouvelle plateforme de vente entre particuliers.</p>
-            <p>Pour finaliser votre inscription et sécuriser votre compte, veuillez vérifier votre adresse email :</p>
-            <a href="${verificationUrl}" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Vérifier mon email</a>
-            <p>Ce lien expirera dans 1 heure pour votre sécurité.</p>
-            <p>Une fois vérifiée, vous pourrez :</p>
-            <ul>
-              <li>Publier vos annonces</li>
-              <li>Acheter en toute sécurité</li>
-              <li>Échanger avec la communauté</li>
-            </ul>
-            <hr style="margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">Équipe Tajdeed</p>
-          </div>
-        `,
-        text: `Bienvenue sur Tajdeed !\n\nMerci de vous être inscrit(e) sur Tajdeed.\n\nPour finaliser votre inscription, cliquez sur ce lien :\n${verificationUrl}\n\nCe lien expirera dans 1 heure.\n\nÉquipe Tajdeed`,
+      const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+      const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+      const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
+
+      if (!clientId || !clientSecret) {
+        throw new BadRequestException('Configuration Google OAuth manquante');
+      }
+
+      // Échanger le code contre un access token
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        }),
       });
+
+      const tokenData = await tokenResponse.json();
+
+      if (!tokenData.access_token) {
+        throw new UnauthorizedException('Échec de l\'authentification Google');
+      }
+
+      // Récupérer les informations de l'utilisateur
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      });
+
+      const googleUser = await userResponse.json();
+
+      // Vérifier si l'utilisateur existe déjà
+      let user = await this.prismaService.user.findUnique({
+        where: { email: googleUser.email },
+      });
+
+      if (!user) {
+        // Créer un nouvel utilisateur
+        user = await this.prismaService.user.create({
+          data: {
+            email: googleUser.email,
+            name: googleUser.name,
+            emailVerified: true, // Google a déjà vérifié l'email
+            status: UserStatus.ACTIVE,
+            role: Role.USER,
+            accounts: {
+              create: {
+                accountId: googleUser.id,
+                providerId: 'google',
+              },
+            },
+          },
+        });
+      } else {
+        // Vérifier si le compte Google est déjà lié
+        const googleAccount = await this.prismaService.account.findFirst({
+          where: {
+            userId: user.id,
+            providerId: 'google',
+          },
+        });
+
+        if (!googleAccount) {
+          // Lier le compte Google à l'utilisateur existant
+          await this.prismaService.account.create({
+            data: {
+              userId: user.id,
+              accountId: googleUser.id,
+              providerId: 'google',
+            },
+          });
+        }
+      }
+
+      // Créer une session
+      const session = await this.createUserSession(user.id);
+
+      // Générer les tokens
+      const accessToken = this.generateAccessToken(user.id, session.id);
+
+      return {
+        accessToken,
+        refreshToken: session.sessionToken,
+        expiresIn: 900,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      };
     } catch (error) {
-      console.error('Erreur envoi email verification:', error);
+      console.error('❌ Erreur lors de l\'authentification Google:', error);
+      throw new UnauthorizedException('Échec de l\'authentification Google');
+    }
+  }
+
+  // ========================================
+  // 👑 GESTION DES ADMINISTRATEURS
+  // ========================================
+
+  /**
+   * Créer un nouvel administrateur
+   */
+  async createAdmin(createAdminDto: any, creatorRole: string) {
+    try {
+      const { email, password, name, role } = createAdminDto;
+
+      // Vérifier les permissions
+      if (creatorRole === 'ADMIN' && role === 'SUPER_ADMIN') {
+        throw new BadRequestException('Seul un SUPER_ADMIN peut créer un autre SUPER_ADMIN');
+      }
+
+      // Vérifier si l'utilisateur existe déjà
+      const existingUser = await this.prismaService.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Un utilisateur avec cet email existe déjà');
+      }
+
+      // Hash du mot de passe
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Créer l'administrateur
+      const admin = await this.prismaService.user.create({
+        data: {
+          email,
+          name,
+          emailVerified: true, // Les admins sont automatiquement vérifiés
+          status: UserStatus.ACTIVE,
+          role: role as Role,
+          accounts: {
+            create: {
+              accountId: email,
+              providerId: 'credential',
+              password: hashedPassword,
+            },
+          },
+        },
+      });
+
+      return {
+        message: `Administrateur ${role} créé avec succès`,
+        admin: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role,
+        },
+      };
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de la création de l\'admin:', error);
+      throw new BadRequestException('Erreur lors de la création de l\'administrateur');
     }
   }
 
   /**
-   * Envoyer un email de réinitialisation de mot de passe
+   * Lister les administrateurs
    */
-  private async sendPasswordResetEmailNotification(email: string, token: string): Promise<void> {
+  async listAdmins(role?: string) {
+    const whereClause: any = {
+      role: {
+        in: ['MODERATOR', 'ADMIN', 'SUPER_ADMIN'],
+      },
+    };
+
+    if (role) {
+      whereClause.role = role;
+    }
+
+    const admins = await this.prismaService.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return {
+      total: admins.length,
+      admins,
+    };
+  }
+
+  /**
+   * Modifier le rôle d'un utilisateur
+   */
+  async updateUserRole(userId: string, newRole: string, adminRole: string) {
     try {
-      const { sendEmail } = await import('../utils/replitmail');
-      const resetUrl = `${this.configService.get('APP_URL', 'http://localhost:3000')}/auth/reset-password?token=${token}`;
-      
-      await sendEmail({
-        to: email,
-        subject: 'Réinitialisation de votre mot de passe - Tajdeed',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #333;">Réinitialisation de mot de passe</h1>
-            <p>Bonjour,</p>
-            <p>Vous avez demandé la réinitialisation de votre mot de passe sur Tajdeed.</p>
-            <p>Cliquez sur le lien ci-dessous pour créer un nouveau mot de passe :</p>
-            <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Réinitialiser mon mot de passe</a>
-            <p>Ce lien expirera dans 1 heure pour votre sécurité.</p>
-            <p>Si vous n'avez pas demandé cette réinitialisation, ignorez ce message.</p>
-            <hr style="margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">Équipe Tajdeed</p>
-          </div>
-        `,
-        text: `Réinitialisation de votre mot de passe - Tajdeed\n\nVous avez demandé la réinitialisation de votre mot de passe.\n\nCliquez sur ce lien :\n${resetUrl}\n\nCe lien expirera dans 1 heure.\n\nÉquipe Tajdeed`,
+      // Vérifier les permissions
+      if (adminRole === 'ADMIN' && newRole === 'SUPER_ADMIN') {
+        throw new BadRequestException('Seul un SUPER_ADMIN peut promouvoir au rôle SUPER_ADMIN');
+      }
+
+      // Vérifier si l'utilisateur existe
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
       });
+
+      if (!user) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // Empêcher de rétrograder un SUPER_ADMIN si on est ADMIN
+      if (user.role === 'SUPER_ADMIN' && adminRole === 'ADMIN') {
+        throw new BadRequestException('Seul un SUPER_ADMIN peut modifier le rôle d\'un autre SUPER_ADMIN');
+      }
+
+      // Mettre à jour le rôle
+      const updatedUser = await this.prismaService.user.update({
+        where: { id: userId },
+        data: { role: newRole as Role },
+      });
+
+      return {
+        message: `Rôle mis à jour avec succès`,
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+        },
+      };
     } catch (error) {
-      console.error('Erreur envoi email reset password:', error);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de la mise à jour du rôle:', error);
+      throw new BadRequestException('Erreur lors de la mise à jour du rôle');
+    }
+  }
+
+  /**
+   * Supprimer un administrateur (rétrogradation en USER)
+   */
+  async removeAdmin(userId: string) {
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // Rétrograder en USER
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: { role: Role.USER },
+      });
+
+      return {
+        message: 'Administrateur rétrogradé en utilisateur standard',
+        userId,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de la suppression de l\'admin:', error);
+      throw new BadRequestException('Erreur lors de la suppression de l\'administrateur');
+    }
+  }
+
+  /**
+   * Obtenir les statistiques des utilisateurs
+   */
+  async getUserStats() {
+    const [totalUsers, activeUsers, suspendedUsers, byRole] = await Promise.all([
+      this.prismaService.user.count(),
+      this.prismaService.user.count({ where: { status: UserStatus.ACTIVE } }),
+      this.prismaService.user.count({ where: { status: UserStatus.SUSPENDED } }),
+      this.prismaService.user.groupBy({
+        by: ['role'],
+        _count: true,
+      }),
+    ]);
+
+    const roleStats = byRole.reduce((acc, item) => {
+      acc[item.role] = item._count;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      total: totalUsers,
+      active: activeUsers,
+      suspended: suspendedUsers,
+      byRole: roleStats,
+    };
+  }
+
+  /**
+   * Lister les utilisateurs avec filtres
+   */
+  async listUsers(filters: any) {
+    const { role, status, page, limit } = filters;
+
+    const whereClause: any = {};
+
+    if (role) {
+      whereClause.role = role;
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      this.prismaService.user.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          status: true,
+          emailVerified: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      this.prismaService.user.count({ where: whereClause }),
+    ]);
+
+    return {
+      users,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Suspendre un utilisateur
+   */
+  async suspendUser(userId: string, reason: string, duration?: number) {
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      // Empêcher de suspendre un admin
+      if (['MODERATOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        throw new BadRequestException('Impossible de suspendre un administrateur');
+      }
+
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: { status: UserStatus.SUSPENDED },
+      });
+
+      // Supprimer toutes les sessions actives
+      await this.prismaService.session.deleteMany({
+        where: { userId },
+      });
+
+      return {
+        message: 'Utilisateur suspendu avec succès',
+        userId,
+        reason,
+        duration,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de la suspension:', error);
+      throw new BadRequestException('Erreur lors de la suspension de l\'utilisateur');
+    }
+  }
+
+  /**
+   * Réactiver un utilisateur
+   */
+  async activateUser(userId: string) {
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: { status: UserStatus.ACTIVE },
+      });
+
+      return {
+        message: 'Utilisateur réactivé avec succès',
+        userId,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('❌ Erreur lors de la réactivation:', error);
+      throw new BadRequestException('Erreur lors de la réactivation de l\'utilisateur');
     }
   }
 }

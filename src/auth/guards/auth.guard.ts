@@ -3,13 +3,16 @@ import { Request } from 'express';
 import { AuthService } from '../auth.service';
 
 // Extension de Request pour inclure user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: any;
-      session?: any;
-    }
-  }
+// Interface étendue pour Request avec authentification
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: string;
+    emailVerified: boolean;
+  };
+  sessionId: string;
 }
 
 @Injectable()
@@ -32,11 +35,14 @@ export class AuthGuard implements CanActivate {
       }
 
       // Attacher les données utilisateur à la requête
-      request.user = sessionData.user;
-      request.session = { 
-        id: sessionData.sessionId,
-        expiresAt: sessionData.expiresAt 
+      (request as any).user = {
+        id: sessionData.user.id,
+        email: sessionData.user.email,
+        name: sessionData.user.name,
+        role: sessionData.user.role,
+        emailVerified: sessionData.user.emailVerified,
       };
+      (request as any).sessionId = sessionData.sessionId;
 
       return true;
     } catch (error) {
@@ -67,7 +73,8 @@ export class AdminGuard implements CanActivate {
     }
 
     // Vérifier le rôle admin
-    if (request.user?.role !== 'ADMIN') {
+    const user = (request as any).user;
+    if (!user || user.role !== 'ADMIN') {
       throw new UnauthorizedException('Accès réservé aux administrateurs');
     }
 

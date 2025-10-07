@@ -1,0 +1,355 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Patch,
+  Delete,
+  Param,
+  Query,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+import { AuthService } from './auth.service';
+import { AuthGuard, Public, CurrentUser, CurrentSession } from './auth.guard';
+import {
+  CreateUserDto,
+  LoginUserDto,
+  DeviceInfoDto,
+  UpdateProfileDto,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+  Enable2FADto,
+  Verify2FADto,
+  SocialLoginDto,
+  AuthResponse,
+  SessionResponse,
+} from './dto/auth.dto';
+import { auth } from './auth.config';
+
+@Controller('auth')
+export class AuthController {
+  constructor(private authService: AuthService) {}
+
+  /**
+   * Inscription d'un nouvel utilisateur
+   */
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(
+    @Body() createUserDto: CreateUserDto,
+    @Req() req: Request,
+  ): Promise<AuthResponse> {
+    const deviceInfo: DeviceInfoDto = {
+      type: req.headers['x-device-type'] as string || 'web',
+      os: req.headers['x-device-os'] as string,
+      model: req.headers['x-device-model'] as string,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip || req.connection.remoteAddress,
+    };
+
+    const result = await this.authService.signUp(createUserDto, deviceInfo);
+    
+    return {
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        fullName: result.user.fullName,
+        avatarKey: result.user.avatarKey,
+        role: result.user.role,
+        emailVerified: result.user.emailVerified || false,
+      },
+      tokens: {
+        accessToken: result.token || '',
+        refreshToken: '', // Better Auth gère les refresh tokens automatiquement
+        expiresIn: 900 // 15 minutes
+      },
+      needsEmailVerification: result.needsEmailVerification,
+    };
+  }
+
+  /**
+   * Connexion d'un utilisateur
+   */
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(
+    @Body() loginUserDto: LoginUserDto,
+    @Req() req: Request,
+  ): Promise<AuthResponse> {
+    const deviceInfo: DeviceInfoDto = {
+      type: req.headers['x-device-type'] as string || 'web',
+      os: req.headers['x-device-os'] as string,
+      model: req.headers['x-device-model'] as string,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip || req.connection.remoteAddress,
+    };
+
+    const result = await this.authService.signIn(loginUserDto, deviceInfo);
+    
+    return {
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        fullName: result.user.fullName,
+        avatarKey: result.user.avatarKey,
+        role: result.user.role,
+        emailVerified: result.user.emailVerified || false,
+      },
+      tokens: {
+        accessToken: result.token || '',
+        refreshToken: '', // Better Auth gère les refresh tokens automatiquement
+        expiresIn: 900 // 15 minutes
+      },
+    };
+  }
+
+  /**
+   * Déconnexion
+   */
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  async logout(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Query('scope') scope?: 'current' | 'all',
+  ) {
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    
+    if (scope === 'all') {
+      // Déconnecter de tous les appareils
+      // TODO: Implémenter la déconnexion de toutes les sessions
+    }
+
+    await this.authService.signOut(token, user.id);
+    
+    return { message: 'Déconnexion réussie' };
+  }
+
+  /**
+   * Récupérer la session actuelle
+   */
+  @Get('me')
+  @UseGuards(AuthGuard)
+  async getCurrentUser(
+    @CurrentUser() user: any,
+  ): Promise<SessionResponse> {
+    const activeSessions = await this.authService.getActiveSessions(user.id);
+    
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        fullName: user.fullName,
+        avatarKey: user.avatarKey,
+        role: user.role,
+        emailVerified: user.emailVerified || false,
+      },
+      session: {
+        id: 'current-session',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      },
+      activeSessions: activeSessions.map(s => ({
+        id: s.id,
+        deviceType: s.deviceType,
+        deviceOs: s.deviceOs,
+        deviceModel: s.deviceModel,
+        lastSeenAt: s.lastSeenAt,
+        lastIp: s.lastIp,
+      })),
+    };
+  }
+
+  /**
+   * Mettre à jour le profil utilisateur
+   */
+  @Patch('profile')
+  @UseGuards(AuthGuard)
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() updateProfileDto: UpdateProfileDto,
+  ) {
+    const updatedUser = await this.authService.updateUserProfile(
+      user.id,
+      updateProfileDto,
+    );
+
+    return {
+      message: 'Profil mis à jour avec succès',
+      user: updatedUser,
+    };
+  }
+
+  /**
+   * Récupérer les sessions actives
+   */
+  @Get('sessions')
+  @UseGuards(AuthGuard)
+  async getActiveSessions(@CurrentUser() user: any) {
+    const sessions = await this.authService.getActiveSessions(user.id);
+    
+    return {
+      sessions: sessions.map(s => ({
+        id: s.id,
+        deviceType: s.deviceType,
+        deviceOs: s.deviceOs,
+        deviceModel: s.deviceModel,
+        lastSeenAt: s.lastSeenAt,
+        lastIp: s.lastIp,
+        createdAt: s.createdAt,
+      })),
+    };
+  }
+
+  /**
+   * Révoquer une session d'appareil
+   */
+  @Delete('sessions/:sessionId')
+  @UseGuards(AuthGuard)
+  async revokeSession(
+    @CurrentUser() user: any,
+    @Param('sessionId') sessionId: string,
+  ) {
+    // TODO: Implémenter la révocation d'une session spécifique
+    return { message: 'Session révoquée avec succès' };
+  }
+
+  /**
+   * Vérification d'email
+   */
+  @Public()
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    const result = await this.authService.verifyEmail(verifyEmailDto.token);
+
+    return {
+      message: 'Email vérifié avec succès',
+      verified: !!result,
+    };
+  }
+
+  /**
+   * Demande de réinitialisation de mot de passe
+   */
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    // TODO: Implémenter avec Better Auth
+    return {
+      message: 'Instructions de réinitialisation envoyées par email',
+    };
+  }
+
+  /**
+   * Réinitialisation de mot de passe
+   */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    // TODO: Implémenter avec Better Auth
+    return {
+      message: 'Mot de passe réinitialisé avec succès',
+    };
+  }
+
+  /**
+   * Changement de mot de passe
+   */
+  @Post('change-password')
+  @UseGuards(AuthGuard)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    // TODO: Implémenter avec Better Auth
+    return {
+      message: 'Mot de passe modifié avec succès',
+    };
+  }
+
+  /**
+   * Activer l'authentification à deux facteurs
+   */
+  @Post('2fa/enable')
+  @UseGuards(AuthGuard)
+  async enable2FA(
+    @CurrentUser() user: any,
+    @Body() enable2FADto: Enable2FADto,
+  ) {
+    // TODO: Implémenter avec le plugin 2FA de Better Auth
+    return {
+      message: 'Authentification à deux facteurs activée',
+      backupCodes: [], // Codes de récupération
+    };
+  }
+
+  /**
+   * Désactiver l'authentification à deux facteurs
+   */
+  @Post('2fa/disable')
+  @UseGuards(AuthGuard)
+  async disable2FA(
+    @CurrentUser() user: any,
+    @Body() verify2FADto: Verify2FADto,
+  ) {
+    // TODO: Implémenter avec le plugin 2FA de Better Auth
+    return {
+      message: 'Authentification à deux facteurs désactivée',
+    };
+  }
+
+  /**
+   * Connexion sociale (OAuth)
+   */
+  @Public()
+  @Post('social/:provider')
+  async socialLogin(
+    @Param('provider') provider: string,
+    @Body() socialLoginDto: SocialLoginDto,
+    @Req() req: Request,
+  ) {
+    // TODO: Implémenter avec Better Auth OAuth
+    return {
+      message: 'Connexion sociale en cours...',
+      redirectUrl: `${process.env.BETTER_AUTH_URL}/api/auth/callback/${provider}`,
+    };
+  }
+
+  /**
+   * Route pour gérer les callbacks Better Auth
+   */
+  @Public()
+  @Get('callback/*')
+  @Post('callback/*')
+  async handleAuthCallback(@Req() req: Request, @Res() res: Response) {
+    // Déléguer à Better Auth
+    return auth.handler(req);
+  }
+
+  /**
+   * Route catch-all pour Better Auth
+   */
+  @Public()
+  @Get('*')
+  @Post('*')
+  async handleAuth(@Req() req: Request, @Res() res: Response) {
+    // Déléguer toutes les autres routes auth à Better Auth
+    return auth.handler(req);
+  }
+}
+

@@ -10,6 +10,7 @@ import {
   Query,
   Param,
   Put,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ModerationService } from './moderation.service';
@@ -47,7 +48,10 @@ export class ModerationController {
     @Body() actionDto: ModerationActionDto,
     @Req() req: Request,
   ): Promise<{ message: string; actionId: string }> {
-    const moderatorId = req.user.id;
+    const moderatorId = (req as any).user?.id;
+    if (!moderatorId) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
     
     const result = await this.moderationService.applyModerationAction(
       actionDto,
@@ -71,7 +75,10 @@ export class ModerationController {
     @Body() warningDto: UserWarningDto,
     @Req() req: Request,
   ): Promise<{ message: string; warningId: string }> {
-    const moderatorId = req.user.id;
+    const moderatorId = (req as any).user?.id;
+    if (!moderatorId) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
     
     const result = await this.moderationService.addUserWarning(
       warningDto,
@@ -136,7 +143,10 @@ export class ModerationController {
     @Req() req: Request,
     @Body() body: { reason: string },
   ): Promise<{ message: string }> {
-    const moderatorId = req.user.id;
+    const moderatorId = (req as any).user?.id;
+    if (!moderatorId) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
     
     await this.moderationService.revokeModerationAction(
       actionId,
@@ -174,7 +184,10 @@ export class ModerationController {
     warnings: any[];
     unreadCount: number;
   }> {
-    const userId = req.user.id;
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
     return await this.moderationService.getUserWarnings(userId);
   }
 
@@ -183,7 +196,10 @@ export class ModerationController {
    */
   @Put('my-warnings/read')
   async markWarningsAsRead(@Req() req: Request): Promise<{ message: string }> {
-    const userId = req.user.id;
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Utilisateur non authentifié');
+    }
     await this.moderationService.markWarningsAsRead(userId);
     
     return {

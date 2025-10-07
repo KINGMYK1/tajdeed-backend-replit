@@ -20,12 +20,13 @@ describe('Auth E2E Tests', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   
-  // Données de test
+  // Données de test avec des valeurs aléatoires
+  const randomId = Math.random().toString(36).substring(7);
   const testUser = {
-    email: 'test@example.com',
+    email: `test-${randomId}@example.com`,
     password: 'Test123456!',
-    name: 'Test User',
-    username: 'testuser',
+    name: `Test User ${randomId}`,
+    username: `testuser${randomId}`,
   };
 
   let verificationToken: string;
@@ -106,8 +107,7 @@ describe('Auth E2E Tests', () => {
       // Récupérer le token de vérification pour les tests suivants
       const verificationTokenRecord = await prisma.verificationToken.findFirst({
         where: { 
-          identifier: testUser.email,
-          type: 'EMAIL_VERIFICATION'
+          identifier: testUser.email
         },
       });
 
@@ -221,8 +221,7 @@ describe('Auth E2E Tests', () => {
       // Vérifier qu'un nouveau token a été créé
       const newToken = await prisma.verificationToken.findFirst({
         where: { 
-          identifier: newUser.email,
-          type: 'EMAIL_VERIFICATION'
+          identifier: newUser.email
         },
         orderBy: { expiresAt: 'desc' },
       });
@@ -389,8 +388,7 @@ describe('Auth E2E Tests', () => {
       // Récupérer le token de réinitialisation
       const resetTokenRecord = await prisma.verificationToken.findFirst({
         where: { 
-          identifier: testUser.email,
-          type: 'PASSWORD_RESET'
+          identifier: testUser.email
         },
         orderBy: { expiresAt: 'desc' },
       });
@@ -461,8 +459,7 @@ describe('Auth E2E Tests', () => {
 
       const newResetToken = await prisma.verificationToken.findFirst({
         where: { 
-          identifier: testUser.email,
-          type: 'PASSWORD_RESET'
+          identifier: testUser.email
         },
         orderBy: { expiresAt: 'desc' },
       });
@@ -521,8 +518,7 @@ describe('Auth E2E Tests', () => {
       // 2. Récupérer le token de vérification
       const journeyVerificationToken = await prisma.verificationToken.findFirst({
         where: { 
-          identifier: journeyUser.email,
-          type: 'EMAIL_VERIFICATION'
+          identifier: journeyUser.email
         },
       });
 
@@ -567,7 +563,4 @@ describe('Auth E2E Tests', () => {
     });
   });
 });
-function beforeAll(arg0: () => Promise<void>) {
-    throw new Error('Function not implemented.');
-}
 

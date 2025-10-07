@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEmail, Length, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional, IsEmail, Length, IsNumber, IsIn } from 'class-validator';
 
 export class GoogleAuthDto {
   @IsString()
@@ -74,10 +74,22 @@ export class ResetPasswordRequestDto {
   email!: string;
 }
 
+export class ForgotPasswordDto {
+  @IsEmail({}, { message: 'Email invalide' })
+  @IsNotEmpty({ message: 'L\'email est requis' })
+  email!: string;
+}
+
 export class ResetPasswordDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email!: string;
+
   @IsString()
   @IsNotEmpty()
-  token!: string;
+  @Length(6, 6, { message: 'Le code de vérification doit contenir exactement 6 chiffres' })
+  @Matches(/^\d{6}$/, { message: 'Le code de vérification doit être composé uniquement de chiffres' })
+  code!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -86,9 +98,15 @@ export class ResetPasswordDto {
 }
 
 export class VerifyEmailDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email!: string;
+
   @IsString()
   @IsNotEmpty()
-  token!: string;
+  @Length(6, 6, { message: 'Le code de vérification doit contenir exactement 6 chiffres' })
+  @Matches(/^\d{6}$/, { message: 'Le code de vérification doit être composé uniquement de chiffres' })
+  code!: string;
 }
 
 export class ResendVerificationDto {
@@ -143,4 +161,41 @@ export class UserWarningDto {
 export class AuthResponseExtendedDto extends AuthResponseDto {
   emailVerified?: boolean;
   status?: string;
+}
+
+// === DTOs pour gestion des admins ===
+
+export class CreateAdminDto {
+  @IsEmail({}, { message: 'Email invalide' })
+  @IsNotEmpty({ message: 'L\'email est requis' })
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Le mot de passe est requis' })
+  @Length(8, 128, { message: 'Le mot de passe doit contenir entre 8 et 128 caractères' })
+  password!: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Le nom est requis' })
+  name!: string;
+
+  @IsString()
+  @IsIn(['MODERATOR', 'ADMIN', 'SUPER_ADMIN'], { message: 'Le rôle doit être MODERATOR, ADMIN ou SUPER_ADMIN' })
+  role!: string;
+}
+
+export class UpdateUserRoleDto {
+  @IsString()
+  @IsIn(['USER', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'], { message: 'Le rôle doit être USER, MODERATOR, ADMIN ou SUPER_ADMIN' })
+  role!: string;
+}
+
+export class SuspendUserDto {
+  @IsString()
+  @IsNotEmpty({ message: 'La raison de la suspension est requise' })
+  reason!: string;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'La durée doit être un nombre (en heures)' })
+  duration?: number; // durée en heures, optionnel (si absent = suspension permanente)
 }

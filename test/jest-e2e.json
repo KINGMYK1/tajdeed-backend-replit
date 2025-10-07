@@ -6,7 +6,17 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(@nestjs|supertest)/)"
+  ],
   "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/../src/$1"
-  }
+    "^src/(.*)$": "<rootDir>/../src/$1",
+    "^better-auth$": "<rootDir>/__mocks__/better-auth.js",
+    "^better-auth/adapters/prisma$": "<rootDir>/__mocks__/better-auth-adapter.js"
+  },
+  "preset": "ts-jest",
+  "testTimeout": 30000,
+  "setupFilesAfterEnv": ["<rootDir>/setup-e2e.ts"],
+  "maxWorkers": 1,
+  "forceExit": true
 }

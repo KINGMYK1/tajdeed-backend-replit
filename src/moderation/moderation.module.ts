@@ -4,6 +4,7 @@ import { ModerationService } from './moderation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { AuthGuard, AdminGuard } from '../auth/guards/auth.guard';
+import { VerificationCodeService } from '../auth/verification-code.service';
 import { ConfigModule } from '@nestjs/config';
 
 /**
@@ -22,6 +23,7 @@ import { ConfigModule } from '@nestjs/config';
     ModerationService,
     PrismaService,
     AuthService,
+    VerificationCodeService,
     AuthGuard,
     AdminGuard,
   ],

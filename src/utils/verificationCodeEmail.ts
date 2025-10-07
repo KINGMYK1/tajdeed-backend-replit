@@ -1,89 +1,11 @@
-/**
- * Service d'envoi d'emails via SMTP (Mailtrap, Gmail, etc.)
- * Alternative à replitmail.ts pour les environnements non-Replit
- */
-
-import * as nodemailer from 'nodemailer';
+import { sendEmail } from './emailService';
 
 /**
- * Interface pour les options d'email
- */
-interface EmailOptions {
-  to: string;
-  subject: string;
-  text?: string;
-  html?: string;
-  replyTo?: string;
-}
-
-/**
- * Configuration du transporteur SMTP
- * Utilise les variables d'environnement pour la configuration
- */
-const createTransporter = () => {
-  const config = {
-    host: process.env.EMAIL_HOST || 'sandbox.smtp.mailtrap.io',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_PORT === '465', // true pour le port 465, false pour les autres
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  };
-
-  // Validation de la configuration
-  if (!config.auth.user || !config.auth.pass) {
-    throw new Error(
-      'Configuration email incomplète. Veuillez définir EMAIL_USER et EMAIL_PASSWORD dans le fichier .env'
-    );
-  }
-
-  return nodemailer.createTransport(config);
-};
-
-/**
- * Envoie un email via SMTP
- * @param options - Options de l'email (destinataire, sujet, contenu)
- * @returns Promise résolue quand l'email est envoyé
- */
-export async function sendEmail(options: EmailOptions): Promise<void> {
-  try {
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || 'noreply@tajdeed.com',
-      to: options.to,
-      subject: options.subject,
-      text: options.text,
-      html: options.html,
-      replyTo: options.replyTo,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log('✅ Email envoyé avec succès:', {
-      messageId: info.messageId,
-      to: options.to,
-      subject: options.subject,
-    });
-
-    // Mailtrap affiche une URL de prévisualisation
-    if (info.response && info.response.includes('mailtrap')) {
-      console.log('📧 Prévisualisez l\'email sur Mailtrap');
-    }
-  } catch (error) {
-    console.error('❌ Erreur lors de l\'envoi de l\'email:', error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    throw new Error(`Échec de l'envoi de l'email: ${errorMessage}`);
-  }
-}
-
-/**
- * Envoie un email de vérification avec code à 6 chiffres
+ * Envoie un email avec un code de vérification à 6 chiffres
  * @param email - Adresse email du destinataire
  * @param code - Code de vérification à 6 chiffres
  */
-export async function sendVerificationEmail(
+export async function sendVerificationCodeEmail(
   email: string,
   code: string,
 ): Promise<void> {
@@ -208,28 +130,24 @@ export async function sendVerificationEmail(
 
   await sendEmail({
     to: email,
-    subject: '✨ Vérifiez votre email - Tajdeed',
+    subject: '✅ Code de vérification - Tajdeed',
     html,
     text,
   });
 }
 
 /**
- * Envoie un email de réinitialisation de mot de passe avec code à 6 chiffres
+ * Envoie un email avec un code de réinitialisation de mot de passe à 6 chiffres
  * @param email - Adresse email du destinataire
  * @param code - Code de réinitialisation à 6 chiffres
  */
-export async function sendPasswordResetEmail(
+export async function sendPasswordResetCodeEmail(
   email: string,
   code: string,
 ): Promise<void> {
-  console.log('📧 Envoi email de réinitialisation de mot de passe');
+  console.log('📧 Envoi email de réinitialisation avec code à 6 chiffres');
   console.log('   Email:', email);
   console.log('   Code:', code);
-
-  // Création de l'URL de réinitialisation avec le code
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const resetUrl = `${baseUrl}/reset-password?code=${code}&email=${encodeURIComponent(email)}`;
 
   const html = `
     <!DOCTYPE html>
@@ -258,20 +176,22 @@ export async function sendPasswordResetEmail(
           .logo {
             font-size: 32px;
             font-weight: bold;
-            color: #4CAF50;
+            color: #dc3545;
           }
-          .button {
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #FF5722;
-            color: white !important;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
+          .code-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 30px 0;
+            border: 2px solid #dc3545;
+            text-align: center;
+          }
+          .code {
+            font-size: 36px;
             font-weight: bold;
-          }
-          .button:hover {
-            background-color: #E64A19;
+            letter-spacing: 8px;
+            color: #dc3545;
+            font-family: 'Courier New', monospace;
           }
           .warning {
             background: #fff3cd;
@@ -288,21 +208,12 @@ export async function sendPasswordResetEmail(
             color: #666;
             text-align: center;
           }
-          .token-box {
-            background: #fff;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            border: 1px solid #ddd;
-            font-family: monospace;
-            word-break: break-all;
-          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <div class="logo">🔒 Tajdeed</div>
+            <div class="logo">🔐 Tajdeed</div>
             <h2>Réinitialisation de mot de passe</h2>
           </div>
           
@@ -310,28 +221,26 @@ export async function sendPasswordResetEmail(
           
           <p>Vous avez demandé la réinitialisation de votre mot de passe sur <strong>Tajdeed</strong>.</p>
           
-          <p>Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p>
+          <p>Veuillez entrer ce code de vérification pour continuer :</p>
           
-          <div style="text-align: center;">
-            <a href="${resetUrl}" class="button">Réinitialiser mon mot de passe</a>
+          <div class="code-box">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">Votre code de réinitialisation</p>
+            <div class="code">${code}</div>
           </div>
           
-          <p>Ou copiez-collez ce lien dans votre navigateur :</p>
-          <div class="token-box">${resetUrl}</div>
-          
           <div class="warning">
-            <p><strong>⚠️ Important :</strong></p>
-            <ul>
-              <li>Ce lien est valable pendant 1 heure</li>
+            <p style="margin: 5px 0;"><strong>⚠️ Important :</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+              <li>Ce code expire dans 15 minutes</li>
               <li>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email</li>
-              <li>Votre mot de passe actuel reste inchangé tant que vous ne créez pas un nouveau</li>
+              <li>Votre mot de passe actuel reste inchangé tant que vous n'en créez pas un nouveau</li>
             </ul>
           </div>
           
           <div class="footer">
-            <p>© 2025 Tajdeed - Plateforme C2C de mode d'occasion</p>
+            <p>© 2025 Tajdeed - Plateforme C2C de vente entre particuliers</p>
             <p>Cet email a été envoyé à ${email}</p>
-            <p>Si vous avez des questions, contactez-nous à support@tajdeed.com</p>
+            <p>Pour toute question, contactez-nous à support@tajdeed.com</p>
           </div>
         </div>
       </body>
@@ -345,10 +254,9 @@ export async function sendPasswordResetEmail(
 
     Vous avez demandé la réinitialisation de votre mot de passe sur Tajdeed.
 
-    Visitez ce lien pour créer un nouveau mot de passe :
-    ${resetUrl}
+    Votre code de vérification : ${code}
 
-    Ce lien est valable pendant 1 heure.
+    Ce code expire dans 15 minutes.
 
     Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
     Votre mot de passe actuel reste inchangé.
@@ -359,7 +267,7 @@ export async function sendPasswordResetEmail(
 
   await sendEmail({
     to: email,
-    subject: '🔒 Réinitialisation de mot de passe - Tajdeed',
+    subject: '🔐 Code de réinitialisation - Tajdeed',
     html,
     text,
   });

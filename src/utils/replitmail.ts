@@ -54,6 +54,49 @@ function createTransporter() {
 }
 
 /**
+ * Envoie un email de vérification avec un lien absolu
+ */
+export async function sendVerificationEmail(
+  email: string,
+  token: string
+): Promise<void> {
+  // Nettoyer le token
+  const cleanToken = token
+    .replace(/^token=/, '')
+    .split('&')[0]
+    .split('?')[0]
+    .trim();
+  
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const verificationLink = `${frontendUrl}/verify-email?token=${cleanToken}`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h1 style="color: #333;">Bienvenue sur Tajdeed !</h1>
+      <p>Bonjour,</p>
+      <p>Merci de vous être inscrit(e) sur Tajdeed, votre nouvelle plateforme de vente entre particuliers.</p>
+      <p>Pour finaliser votre inscription et sécuriser votre compte, veuillez vérifier votre adresse email :</p>
+      <a href="${verificationLink}" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Vérifier mon email</a>
+      <p>Ce lien expirera dans 1 heure pour votre sécurité.</p>
+      <p>Une fois vérifiée, vous pourrez :</p>
+      <ul>
+        <li>Publier vos annonces</li>
+        <li>Acheter en toute sécurité</li>
+        <li>Échanger avec la communauté</li>
+      </ul>
+      <hr style="margin: 20px 0;">
+      <p style="color: #666; font-size: 12px;">Équipe Tajdeed</p>
+    </div>
+  `;
+  
+  await sendEmail({
+    to: email,
+    subject: '✉️ Vérifiez votre adresse email - Tajdeed',
+    html,
+  });
+}
+
+/**
  * Envoie un email via Nodemailer (compatible Mailtrap, Gmail, etc.)
  */
 export async function sendEmail(message: SmtpMessage): Promise<{

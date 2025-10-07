@@ -1,210 +1,195 @@
-import { 
-  Controller, 
-  Post, 
-  Get, 
-  Body, 
-  UseGuards, 
-  Req, 
-  HttpStatus, 
+﻿import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Req,
+  HttpStatus,
   HttpCode,
   BadRequestException,
+  Put,
+  Param,
+  Delete,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { AuthGuard } from './guards/auth.guard';
-import { 
-  GoogleAuthDto, 
-  RefreshTokenDto, 
-  AuthResponseDto, 
-  UserProfileDto,
+import { AuthGuard, AdminGuard } from './guards/auth.guard';
+import {
+  RefreshTokenDto,
   RegisterDto,
   LoginDto,
   ResetPasswordRequestDto,
   ResetPasswordDto,
   VerifyEmailDto,
   ResendVerificationDto,
-  AuthResponseExtendedDto
+  GoogleAuthDto,
+  CreateAdminDto,
+  UpdateUserRoleDto,
+  SuspendUserDto,
 } from './dto/auth.dto';
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: string;
+  };
+  sessionId?: string;
+}
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('google')
-  @HttpCode(HttpStatus.OK)
-  async signInGoogle(@Body() googleAuthDto: GoogleAuthDto): Promise<AuthResponseDto> {
-    const result = await this.authService.signInGoogle(googleAuthDto.code);
-    
-    return {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      user: {
-        id: result.user.id,
-        username: result.user.username || result.user.email,
-        role: result.user.role,
-      },
-      expiresIn: result.expiresIn,
-    };
-  }
-
-  @Get('google/callback')
-  async googleCallback(@Req() req: Request) {
-    const code = req.query.code as string;
-    const state = req.query.state as string;
-
-    if (!code) {
-      throw new BadRequestException('Code d\'autorisation manquant');
-    }
-
-    const result = await this.authService.signInGoogle(code);
-    
-    // En production, rediriger vers le frontend avec les tokens
-    return {
-      message: 'Authentification réussie',
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      user: result.user,
-    };
-  }
-
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto): Promise<AuthResponseDto> {
-    const result = await this.authService.refreshToken(refreshTokenDto.refreshToken);
-    
-    return {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      user: {
-        id: result.user.id,
-        username: result.user.username || result.user.email,
-        role: result.user.role,
-      },
-      expiresIn: result.expiresIn,
-    };
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshToken(refreshTokenDto);
   }
 
   @Post('logout')
   @UseGuards(AuthGuard)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Req() req: Request): Promise<void> {
-    const sessionId = req.session?.id;
+  @HttpCode(HttpStatus.OK)
+  async logout(@Req() req: AuthenticatedRequest) {
+    const sessionId = req.sessionId;
     if (sessionId) {
       await this.authService.logout(sessionId);
     }
+    return { message: 'Déconnexion réussie' };
   }
 
   @Get('me')
   @UseGuards(AuthGuard)
-  async getProfile(@Req() req: Request): Promise<UserProfileDto> {
-    const user = req.user;
-    
-    return {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+  async getProfile(@Req() req: AuthenticatedRequest) {
+    const sessionId = req.sessionId;
+    if (!sessionId) {
+      return req.user;
+    }
+    return this.authService.getMe(sessionId);
   }
 
-  // === Nouveaux endpoints pour authentification email/password ===
-
-  /**
-   * Inscription d'un nouvel utilisateur avec email et mot de passe
-   * Envoie automatiquement un email de vérification
-   */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto): Promise<{ message: string; userId: string }> {
-    const result = await this.authService.registerWithEmail(registerDto);
-    
-    return {
-      message: 'Inscription réussie. Veuillez vérifier votre email pour activer votre compte.',
-      userId: result.userId,
-    };
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
   }
 
-  /**
-   * Connexion avec email et mot de passe
-   * Retourne une erreur si l'email n'est pas vérifié
-   */
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto): Promise<AuthResponseExtendedDto> {
-    const result = await this.authService.loginWithEmail(loginDto);
-    
-    return {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      user: {
-        id: result.user.id,
-        username: result.user.username || result.user.email,
-        role: result.user.role,
-      },
-      expiresIn: result.expiresIn,
-      emailVerified: result.user.emailVerified,
-      status: result.user.status,
-    };
-  }
-
-  /**
-   * Vérification d'email avec token
-   */
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<{ message: string; accessToken?: string; refreshToken?: string }> {
-    const result = await this.authService.verifyEmail(verifyEmailDto.token);
-    
-    if (result.autoSignIn) {
-      return {
-        message: 'Email vérifié avec succès. Vous êtes maintenant connecté.',
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-      };
-    }
-    
-    return {
-      message: 'Email vérifié avec succès. Vous pouvez maintenant vous connecter.',
-    };
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto);
   }
 
-  /**
-   * Renvoyer un email de vérification
-   */
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
-  async resendVerification(@Body() resendDto: ResendVerificationDto): Promise<{ message: string }> {
-    await this.authService.resendVerificationEmail(resendDto.email);
-    
-    return {
-      message: 'Email de vérification renvoyé avec succès.',
-    };
+  async resendVerification(@Body() resendDto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(resendDto);
   }
 
-  /**
-   * Demande de réinitialisation de mot de passe
-   */
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() resetRequestDto: ResetPasswordRequestDto): Promise<{ message: string }> {
-    await this.authService.sendPasswordResetEmail(resetRequestDto.email);
-    
+  async forgotPassword(@Body() forgotPasswordDto: ResetPasswordRequestDto) {
+    return this.authService.sendPasswordResetEmail({ email: forgotPasswordDto.email });
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Get('google')
+  @HttpCode(HttpStatus.OK)
+  async googleAuth() {
+    const googleAuthUrl = this.authService.getGoogleAuthUrl();
     return {
-      message: 'Si l\'adresse email existe, un lien de réinitialisation a été envoyé.',
+      url: googleAuthUrl,
+      message: 'Redirigez l utilisateur vers cette URL pour se connecter avec Google'
     };
   }
 
-  /**
-   * Réinitialisation de mot de passe avec token
-   */
-  @Post('reset-password')
+  @Get('google/callback')
   @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    await this.authService.resetPassword(resetPasswordDto.token, resetPasswordDto.newPassword);
-    
-    return {
-      message: 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
-    };
+  async googleCallback(@Query('code') code: string, @Query('state') state?: string) {
+    if (!code) {
+      throw new BadRequestException('Code d autorisation Google manquant');
+    }
+    return this.authService.signInGoogle(code);
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  async signInGoogle(@Body() googleAuthDto: GoogleAuthDto) {
+    return this.authService.signInGoogle(googleAuthDto.code);
+  }
+
+  @Post('admin/create')
+  @UseGuards(AuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createAdmin(@Body() createAdminDto: CreateAdminDto, @Req() req: AuthenticatedRequest) {
+    const creatorRole = (req as any).user?.role;
+    return this.authService.createAdmin(createAdminDto, creatorRole);
+  }
+
+  @Get('admin/list')
+  @UseGuards(AuthGuard, AdminGuard)
+  async listAdmins(@Query('role') role?: string) {
+    return this.authService.listAdmins(role);
+  }
+
+  @Put('admin/user/:userId/role')
+  @UseGuards(AuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateUserRole(@Param('userId') userId: string, @Body() updateRoleDto: UpdateUserRoleDto, @Req() req: AuthenticatedRequest) {
+    const adminRole = (req as any).user?.role;
+    return this.authService.updateUserRole(userId, updateRoleDto.role, adminRole);
+  }
+
+  @Delete('admin/:userId')
+  @UseGuards(AuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async removeAdmin(@Param('userId') userId: string, @Req() req: AuthenticatedRequest) {
+    const adminRole = (req as any).user?.role;
+    if (adminRole !== 'SUPER_ADMIN') {
+      throw new BadRequestException('Seuls les SUPER_ADMIN peuvent supprimer des admins');
+    }
+    return this.authService.removeAdmin(userId);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(AuthGuard, AdminGuard)
+  async getUserStats() {
+    return this.authService.getUserStats();
+  }
+
+  @Get('admin/users')
+  @UseGuards(AuthGuard, AdminGuard)
+  async listUsers(@Query('role') role?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.authService.listUsers({ role, status, page: pageNum, limit: limitNum });
+  }
+
+  @Put('admin/user/:userId/suspend')
+  @UseGuards(AuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async suspendUser(@Param('userId') userId: string, @Body() suspendDto: SuspendUserDto) {
+    return this.authService.suspendUser(userId, suspendDto.reason, suspendDto.duration);
+  }
+
+  @Put('admin/user/:userId/activate')
+  @UseGuards(AuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async activateUser(@Param('userId') userId: string) {
+    return this.authService.activateUser(userId);
   }
 }

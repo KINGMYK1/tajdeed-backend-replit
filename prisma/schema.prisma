@@ -84,6 +84,20 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+// Nouveau modèle pour les codes de vérification à 6 chiffres
+model VerificationCode {
+  id         String             @id @default(uuid())
+  email      String             // Email de l'utilisateur
+  code       String             // Code à 6 chiffres
+  type       VerificationType   // Type de vérification (EMAIL, PASSWORD_RESET)
+  expiresAt  DateTime           @map("expires_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  usedAt     DateTime?          @map("used_at") // Date d'utilisation du code
+
+  @@index([email, type])
+  @@map("verification_codes")
+}
+
 // === Modeles de Modération ===
 
 model ModeratedUser {
@@ -133,6 +147,11 @@ enum UserStatus {
   SUSPENDED
   BANNED
   PENDING_VERIFICATION
+}
+
+enum VerificationType {
+  EMAIL
+  PASSWORD_RESET
 }
 
 enum ModerationAction {

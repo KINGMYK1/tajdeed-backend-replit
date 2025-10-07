@@ -3,11 +3,18 @@
   "compilerOptions": {
     "types": ["jest", "node", "supertest"],
     "strict": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+  "moduleResolution": "node",
+  "ignoreDeprecations": "6.0",
+    "resolveJsonModule": true
   },
   "include": [
     "./**/*.ts",
     "../src/**/*.ts"
   ],
-  "exclude": []
+  "exclude": [
+    "node_modules"
+  ]
 }
