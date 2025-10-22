@@ -16,6 +16,14 @@ model User {
   id               String    @id @default(uuid())
   email            String    @unique
   name             String?
+  firstName        String?
+  lastName         String?
+  phoneNumber      String?
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  postalCode       String?
+  country          String?
   emailVerified    Boolean   @default(false)
   image            String?
   createdAt        DateTime  @default(now())
@@ -32,6 +40,7 @@ model User {
   moderationActions ModeratedUser[] @relation("ModeratedUser")
   moderatorActions  ModeratedUser[] @relation("ModeratorUser")
   warnings         UserWarning[]
+  profile          Profile?
   
   @@map("users")
 }
@@ -133,10 +142,46 @@ model UserWarning {
   @@map("user_warnings")
 }
 
+model Profile {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  avatarUrl  String?
+  bio        String?
+  location   String?
+  preferences Json?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses  Address[]
+
+  @@map("profiles")
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  profileId  String
+  line1      String
+  line2      String?
+  city       String
+  country    String
+  zip        String?
+  label      String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("addresses")
+}
+
 // === Enums ===
 
 enum Role {
   USER
+  SELLER
   MODERATOR
   ADMIN
   SUPER_ADMIN
@@ -167,4 +212,130 @@ enum WarningSeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// === Modèles de Marketplace ===
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  items     Item[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model Item {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  price       Float
+  size        String?
+  condition   String?
+  status      ItemStatus @default(AVAILABLE)
+  categoryId  String
+  sellerId    String
+  images      ItemImage[]
+  favorites   Favorite[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  category    Category   @relation(fields: [categoryId], references: [id])
+  seller      User       @relation(fields: [sellerId], references: [id])
+
+  @@map("items")
+}
+
+model ItemImage {
+  id     String @id @default(cuid())
+  itemId String
+  url    String
+
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("item_images")
+}
+
+model Favorite {
+  id     String   @id @default(cuid())
+  userId String
+  itemId String
+  createdAt DateTime @default(now())
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item   Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@map("favorites")
+}
+
+enum ItemStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+// === Modèles de Marketplace ===
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  items     Item[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model Item {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  price       Float
+  size        String?
+  condition   String?
+  status      ItemStatus @default(AVAILABLE)
+  categoryId  String
+  sellerId    String
+  images      ItemImage[]
+  favorites   Favorite[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  category    Category   @relation(fields: [categoryId], references: [id])
+  seller      User       @relation(fields: [sellerId], references: [id])
+
+  @@map("items")
+}
+
+model ItemImage {
+  id     String @id @default(cuid())
+  itemId String
+  url    String
+
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("item_images")
+}
+
+model Favorite {
+  id     String   @id @default(cuid())
+  userId String
+  itemId String
+  createdAt DateTime @default(now())
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item   Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@map("favorites")
+}
+
+enum ItemStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
 }

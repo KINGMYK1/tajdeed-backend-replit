@@ -1,4 +1,15 @@
-import { IsString, IsNotEmpty, Matches, IsOptional, IsEmail, Length, IsNumber, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  Matches,
+  IsOptional,
+  IsEmail,
+  Length,
+  IsNumber,
+  IsIn,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class GoogleAuthDto {
   @IsString()
@@ -114,6 +125,55 @@ export class ResendVerificationDto {
   @IsEmail()
   @IsNotEmpty()
   email!: string;
+}
+
+export class UpdateProfileDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  phoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  addressLine1?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  addressLine2?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  country?: string;
 }
 
 // === DTOs pour modération ===

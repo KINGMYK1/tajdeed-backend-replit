@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationType } from '@prisma/client';
 import { sendVerificationCodeEmail, sendPasswordResetCodeEmail } from '../utils/verificationCodeEmail';
 
 @Injectable()
 export class VerificationCodeService {
+  private readonly logger = new Logger(VerificationCodeService.name);
+
   constructor(private readonly prismaService: PrismaService) {}
 
   /**
@@ -149,7 +151,7 @@ export class VerificationCodeService {
       await sendPasswordResetCodeEmail(email, code);
     }
 
-    console.log(`✅ Code ${type} généré et envoyé à ${email}`);
+    this.logger.log(`✅ Code ${type} généré et envoyé à ${email}`);
   }
 
   /**

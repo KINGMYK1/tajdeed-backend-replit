@@ -1,6 +1,8 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth.service';
+import { Reflector } from '@nestjs/core';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 // Extension de Request pour inclure user
 // Interface étendue pour Request avec authentification
@@ -17,9 +19,21 @@ interface AuthenticatedRequest extends Request {
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractTokenFromHeader(request);
 
@@ -35,12 +49,16 @@ export class AuthGuard implements CanActivate {
       }
 
       // Attacher les données utilisateur à la requête
+      if (!sessionData.user) {
+        throw new UnauthorizedException('Utilisateur introuvable pour cette session');
+      }
+
       (request as any).user = {
         id: sessionData.user.id,
         email: sessionData.user.email,
-        name: sessionData.user.name,
+        name: sessionData.user.name ?? null,
         role: sessionData.user.role,
-        emailVerified: sessionData.user.emailVerified,
+        emailVerified: sessionData.user.emailVerified ?? false,
       };
       (request as any).sessionId = sessionData.sessionId;
 
@@ -59,15 +77,20 @@ export class AuthGuard implements CanActivate {
 
 @Injectable()
 export class AdminGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  private readonly authGuard: AuthGuard;
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly reflector: Reflector,
+  ) {
+    this.authGuard = new AuthGuard(this.authService, this.reflector);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    
-    // Vérifier d'abord l'authentification
-    const authGuard = new AuthGuard(this.authService);
-    const isAuthenticated = await authGuard.canActivate(context);
-    
+
+    const isAuthenticated = await this.authGuard.canActivate(context);
+
     if (!isAuthenticated) {
       return false;
     }

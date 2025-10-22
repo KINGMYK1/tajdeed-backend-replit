@@ -2,12 +2,12 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
-  UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../auth.service';
 import { AuthGuard } from './auth.guard';
+import { Reflector } from '@nestjs/core';
 
 /**
  * Guard pour les modérateurs et niveaux supérieurs
@@ -16,14 +16,20 @@ import { AuthGuard } from './auth.guard';
  */
 @Injectable()
 export class ModeratorGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  private readonly authGuard: AuthGuard;
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly reflector: Reflector,
+  ) {
+    this.authGuard = new AuthGuard(this.authService, this.reflector);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Vérifier d'abord l'authentification
-    const authGuard = new AuthGuard(this.authService);
-    const isAuthenticated = await authGuard.canActivate(context);
+    const isAuthenticated = await this.authGuard.canActivate(context);
 
     if (!isAuthenticated) {
       return false;
@@ -50,14 +56,20 @@ export class ModeratorGuard implements CanActivate {
  */
 @Injectable()
 export class AdminOnlyGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  private readonly authGuard: AuthGuard;
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly reflector: Reflector,
+  ) {
+    this.authGuard = new AuthGuard(this.authService, this.reflector);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Vérifier d'abord l'authentification
-    const authGuard = new AuthGuard(this.authService);
-    const isAuthenticated = await authGuard.canActivate(context);
+    const isAuthenticated = await this.authGuard.canActivate(context);
 
     if (!isAuthenticated) {
       return false;
@@ -84,14 +96,20 @@ export class AdminOnlyGuard implements CanActivate {
  */
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  private readonly authGuard: AuthGuard;
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly reflector: Reflector,
+  ) {
+    this.authGuard = new AuthGuard(this.authService, this.reflector);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Vérifier d'abord l'authentification
-    const authGuard = new AuthGuard(this.authService);
-    const isAuthenticated = await authGuard.canActivate(context);
+    const isAuthenticated = await this.authGuard.canActivate(context);
 
     if (!isAuthenticated) {
       return false;

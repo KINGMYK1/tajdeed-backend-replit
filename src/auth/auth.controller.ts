@@ -12,10 +12,13 @@
   Param,
   Delete,
   Query,
+  Res,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard, AdminGuard } from './guards/auth.guard';
+import { Public } from './decorators/public.decorator';
 import {
   RefreshTokenDto,
   RegisterDto,
@@ -28,6 +31,7 @@ import {
   CreateAdminDto,
   UpdateUserRoleDto,
   SuspendUserDto,
+  UpdateProfileDto,
 } from './dto/auth.dto';
 
 interface AuthenticatedRequest extends Request {
@@ -44,6 +48,7 @@ interface AuthenticatedRequest extends Request {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
@@ -71,42 +76,55 @@ export class AuthController {
     return this.authService.getMe(sessionId);
   }
 
+  @Put('profile')
+  @UseGuards(AuthGuard)
+  async updateProfile(@Req() req: AuthenticatedRequest, @Body() updateProfileDto: UpdateProfileDto) {
+    return this.authService.updateUserProfile(req.user.id, updateProfileDto);
+  }
+
+  @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
+  @Public()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(verifyEmailDto);
   }
 
+  @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   async resendVerification(@Body() resendDto: ResendVerificationDto) {
     return this.authService.resendVerificationEmail(resendDto);
   }
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 
+  @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body() forgotPasswordDto: ResetPasswordRequestDto) {
     return this.authService.sendPasswordResetEmail({ email: forgotPasswordDto.email });
   }
 
+  @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
   }
 
+  @Public()
   @Get('google')
   @HttpCode(HttpStatus.OK)
   async googleAuth() {
@@ -117,15 +135,27 @@ export class AuthController {
     };
   }
 
+  @Public()
   @Get('google/callback')
   @HttpCode(HttpStatus.OK)
-  async googleCallback(@Query('code') code: string, @Query('state') state?: string) {
+  async googleCallback(@Query('code') code: string, @Query('state') state: string | undefined, @Res() res: Response) {
     if (!code) {
-      throw new BadRequestException('Code d autorisation Google manquant');
+      const html = this.buildGoogleOAuthResponse('GOOGLE_OAUTH_ERROR', { error: 'Code d autorisation Google manquant' });
+      return res.status(HttpStatus.BAD_REQUEST).setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
     }
-    return this.authService.signInGoogle(code);
+
+    try {
+      const authResult = await this.authService.signInGoogle(code);
+      const html = this.buildGoogleOAuthResponse('GOOGLE_OAUTH_SUCCESS', authResult);
+      return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+    } catch (error: any) {
+      const message = error?.message || 'Échec de l authentification Google';
+      const html = this.buildGoogleOAuthResponse('GOOGLE_OAUTH_ERROR', { error: message });
+      return res.status(HttpStatus.UNAUTHORIZED).setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+    }
   }
 
+  @Public()
   @Post('google')
   @HttpCode(HttpStatus.OK)
   async signInGoogle(@Body() googleAuthDto: GoogleAuthDto) {
@@ -191,5 +221,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async activateUser(@Param('userId') userId: string) {
     return this.authService.activateUser(userId);
+  }
+
+  private buildGoogleOAuthResponse(type: 'GOOGLE_OAUTH_SUCCESS' | 'GOOGLE_OAUTH_ERROR', data: any): string {
+    const origin = this.authService.getFrontendOrigin();
+    const serialized = JSON.stringify(data).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+    const messageKey = type === 'GOOGLE_OAUTH_SUCCESS' ? 'payload' : 'error';
+
+    return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" /><title>Google OAuth</title></head><body><script>(function(){var data=${serialized};var targetOrigin='${origin}';if(window.opener&&!window.opener.closed){window.opener.postMessage({type:'${type}',${messageKey}:data},targetOrigin);}window.close();})();</script><p>Authentification Google terminée. Vous pouvez fermer cette fenêtre.</p></body></html>`;
   }
 }

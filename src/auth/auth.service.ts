@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,14 +17,17 @@ import {
   ResendVerificationDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  UpdateProfileDto,
 } from './dto/auth.dto';
-import { UserStatus, Role } from '@prisma/client';
+import { UserStatus, Role, User as PrismaUser } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly configService: ConfigService,
@@ -84,7 +88,7 @@ export class AuthService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      console.error('❌ Erreur lors de l\'inscription:', error);
+      this.logger.error('❌ Erreur lors de l\'inscription:', error as Error);
       throw new BadRequestException('Erreur lors de l\'inscription');
     }
   }
@@ -119,7 +123,7 @@ export class AuthService {
       }
 
       // Mettre à jour le statut de l'utilisateur
-      await this.prismaService.user.update({
+      const updatedUser = await this.prismaService.user.update({
         where: { id: user.id },
         data: {
           emailVerified: true,
@@ -131,23 +135,18 @@ export class AuthService {
       await this.verificationCodeService.deleteUsedCodes(email, 'EMAIL_VERIFICATION');
 
       // Créer une session pour l'utilisateur (auto-login)
-      const session = await this.createUserSession(user.id);
-      const accessToken = this.generateAccessToken(user.id, session.id);
+      const session = await this.createUserSession(updatedUser.id);
+      const accessToken = this.generateAccessToken(updatedUser.id, session.id);
       const refreshToken = session.sessionToken;
 
       return {
         message: 'Email vérifié avec succès',
         accessToken,
         refreshToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
+        user: this.mapUser(updatedUser),
       };
     } catch (error: any) {
-      console.error('❌ Erreur lors de la vérification:', error);
+      this.logger.error('❌ Erreur lors de la vérification:', error as Error);
       throw new BadRequestException(
         error.message || 'Erreur lors de la vérification de l\'email',
       );
@@ -190,7 +189,7 @@ export class AuthService {
         message: 'Un nouveau code de vérification à 6 chiffres a été envoyé à votre email.',
       };
     } catch (error) {
-      console.error('❌ Erreur lors du renvoi:', error);
+      this.logger.error('❌ Erreur lors du renvoi:', error as Error);
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -254,16 +253,10 @@ export class AuthService {
       return {
         accessToken,
         refreshToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          emailVerified: user.emailVerified,
-        },
+        user: this.mapUser(user),
       };
     } catch (error) {
-      console.error('❌ Erreur lors de la connexion:', error);
+      this.logger.error('❌ Erreur lors de la connexion:', error as Error);
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -303,7 +296,7 @@ export class AuthService {
         message: 'Un code de réinitialisation à 6 chiffres a été envoyé à votre email.',
       };
     } catch (error) {
-      console.error('❌ Erreur lors de l\'envoi du code de reset:', error);
+      this.logger.error('❌ Erreur lors de l\'envoi du code de reset:', error as Error);
       // Silently fail pour ne pas révéler d'informations
       return {
         message: 'Si un compte existe avec cet email, un code de réinitialisation a été envoyé.',
@@ -361,7 +354,7 @@ export class AuthService {
         message: 'Mot de passe réinitialisé avec succès',
       };
     } catch (error) {
-      console.error('❌ Erreur lors de la réinitialisation:', error);
+      this.logger.error('❌ Erreur lors de la réinitialisation:', error as Error);
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
@@ -407,15 +400,10 @@ export class AuthService {
       return {
         accessToken,
         refreshToken,
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.name,
-          role: session.user.role,
-        },
+        user: this.mapUser(session.user),
       };
     } catch (error) {
-      console.error('❌ Erreur lors du refresh:', error);
+      this.logger.error('❌ Erreur lors du refresh:', error as Error);
       throw new UnauthorizedException('Token de rafraîchissement invalide');
     }
   }
@@ -431,7 +419,7 @@ export class AuthService {
         where: { id: sessionId },
       });
     } catch (error) {
-      console.error('❌ Erreur lors de la déconnexion:', error);
+      this.logger.error('❌ Erreur lors de la déconnexion:', error as Error);
       // Ne pas lever d'erreur si la session n'existe pas
     }
   }
@@ -465,7 +453,7 @@ export class AuthService {
 
       return {
         userId: session.userId,
-        user: session.user,
+        user: this.mapUser(session.user),
         sessionId: session.id,
       };
     } catch (error) {
@@ -495,7 +483,57 @@ export class AuthService {
       throw new UnauthorizedException('Session invalide');
     }
 
-    return session.user;
+    return this.mapUser(session.user);
+  }
+
+  async updateUserProfile(userId: string, updateProfileDto: UpdateProfileDto) {
+    const updatedUser = await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        name: updateProfileDto.name ?? undefined,
+        firstName: updateProfileDto.firstName ?? undefined,
+        lastName: updateProfileDto.lastName ?? undefined,
+        phoneNumber: updateProfileDto.phoneNumber ?? undefined,
+        addressLine1: updateProfileDto.addressLine1 ?? undefined,
+        addressLine2: updateProfileDto.addressLine2 ?? undefined,
+        city: updateProfileDto.city ?? undefined,
+        postalCode: updateProfileDto.postalCode ?? undefined,
+        country: updateProfileDto.country ?? undefined,
+      },
+    });
+
+    return {
+      message: 'Profil mis à jour',
+      user: this.mapUser(updatedUser),
+    };
+  }
+
+  /**
+   * Mapper un utilisateur Prisma vers l'objet exposé au client
+   */
+  private mapUser(user: PrismaUser) {
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: user.phoneNumber,
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2,
+      city: user.city,
+      postalCode: user.postalCode,
+      country: user.country,
+      role: user.role,
+      status: user.status,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
   /**
@@ -547,12 +585,32 @@ export class AuthService {
   // 🌐 GOOGLE OAUTH
   // ========================================
 
+  private resolveGoogleRedirectUri(): string {
+    const configured = this.configService.get<string>('GOOGLE_REDIRECT_URI');
+    if (configured) {
+      const trimmed = configured.replace(/\/$/, '');
+      if (!trimmed.includes('/auth/google/callback')) {
+        return trimmed;
+      }
+
+      if (trimmed.includes('/api/auth/google/callback')) {
+        return trimmed;
+      }
+
+      return trimmed.replace('/auth/google/callback', '/api/auth/google/callback');
+    }
+
+    const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+    const normalizedBase = appUrl.replace(/\/$/, '');
+    return `${normalizedBase}/api/auth/google/callback`;
+  }
+
   /**
    * Générer l'URL d'authentification Google OAuth
    */
   getGoogleAuthUrl(): string {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-    const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
+    const redirectUri = this.resolveGoogleRedirectUri();
     const scope = 'email profile';
     
     if (!clientId) {
@@ -569,7 +627,7 @@ export class AuthService {
     try {
       const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
       const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
-      const redirectUri = this.configService.get<string>('GOOGLE_REDIRECT_URI') || 'http://localhost:3000/auth/google/callback';
+      const redirectUri = this.resolveGoogleRedirectUri();
 
       if (!clientId || !clientSecret) {
         throw new BadRequestException('Configuration Google OAuth manquante');
@@ -658,16 +716,20 @@ export class AuthService {
         accessToken,
         refreshToken: session.sessionToken,
         expiresIn: 900,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
+        user: this.mapUser(user),
       };
     } catch (error) {
-      console.error('❌ Erreur lors de l\'authentification Google:', error);
+      this.logger.error('❌ Erreur lors de l\'authentification Google:', error as Error);
       throw new UnauthorizedException('Échec de l\'authentification Google');
+    }
+  }
+
+  getFrontendOrigin(): string {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || this.configService.get<string>('APP_URL') || 'http://localhost:5174';
+    try {
+      return new URL(frontendUrl).origin;
+    } catch {
+      return frontendUrl;
     }
   }
 
@@ -730,7 +792,7 @@ export class AuthService {
       if (error instanceof ConflictException || error instanceof BadRequestException) {
         throw error;
       }
-      console.error('❌ Erreur lors de la création de l\'admin:', error);
+      this.logger.error('❌ Erreur lors de la création de l\'admin:', error as Error);
       throw new BadRequestException('Erreur lors de la création de l\'administrateur');
     }
   }
@@ -802,18 +864,13 @@ export class AuthService {
 
       return {
         message: `Rôle mis à jour avec succès`,
-        user: {
-          id: updatedUser.id,
-          email: updatedUser.email,
-          name: updatedUser.name,
-          role: updatedUser.role,
-        },
+        user: this.mapUser(updatedUser),
       };
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      console.error('❌ Erreur lors de la mise à jour du rôle:', error);
+      this.logger.error('❌ Erreur lors de la mise à jour du rôle:', error as Error);
       throw new BadRequestException('Erreur lors de la mise à jour du rôle');
     }
   }
@@ -845,7 +902,7 @@ export class AuthService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      console.error('❌ Erreur lors de la suppression de l\'admin:', error);
+      this.logger.error('❌ Erreur lors de la suppression de l\'admin:', error as Error);
       throw new BadRequestException('Erreur lors de la suppression de l\'administrateur');
     }
   }
@@ -902,6 +959,14 @@ export class AuthService {
           id: true,
           email: true,
           name: true,
+          firstName: true,
+          lastName: true,
+          phoneNumber: true,
+          addressLine1: true,
+          addressLine2: true,
+          city: true,
+          postalCode: true,
+          country: true,
           role: true,
           status: true,
           emailVerified: true,
@@ -966,7 +1031,7 @@ export class AuthService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      console.error('❌ Erreur lors de la suspension:', error);
+      this.logger.error('❌ Erreur lors de la suspension:', error as Error);
       throw new BadRequestException('Erreur lors de la suspension de l\'utilisateur');
     }
   }
@@ -997,7 +1062,7 @@ export class AuthService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      console.error('❌ Erreur lors de la réactivation:', error);
+      this.logger.error('❌ Erreur lors de la réactivation:', error as Error);
       throw new BadRequestException('Erreur lors de la réactivation de l\'utilisateur');
     }
   }
